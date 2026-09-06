@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* Command-center aesthetic: dark, map-first, no gradients/bootstrap look. */
+body {
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+.maplibregl-ctrl-attrib {
+  font-size: 10px;
+}
