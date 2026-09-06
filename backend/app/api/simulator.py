@@ -1,0 +1,73 @@
+from dataclasses import asdict
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from app.core.deps import get_current_user, require_role
+from app.database import get_db
+from app.schemas.incident import IncidentOut
+from app.schemas.simulator import (
+    SimulatorStartRequest,
+    SimulatorStateOut,
+    SimulatorUpdateRequest,
+    SpawnIncidentsRequest,
+)
+from app.services import simulator as simulator_service
+
+router = APIRouter(prefix="/simulator", tags=["simulator"])
+
+
+@router.get("/state", response_model=SimulatorStateOut)
+def get_simulator_state(_current_user=Depends(get_current_user)) -> SimulatorStateOut:
+    return SimulatorStateOut(**asdict(simulator_service.get_state()))
+
+
+@router.post("/start", response_model=SimulatorStateOut)
+def start_simulator(
+    payload: SimulatorStartRequest,
+    _current_user=Depends(require_role("admin")),
+) -> SimulatorStateOut:
+    """The "START DISASTER" button — sets a severe preset and immediately
+    raises effective hazard/accessibility on every risk zone (see
+    app/services/risk_zones.py), which is what the map/home page will show
+    on their next fetch."""
+    state = simulator_service.start(
+        rainfall_mm=payload.rainfall_mm,
+        water_level_m=payload.water_level_m,
+        road_blockage_pct=payload.road_blockage_pct,
+    )
+    return SimulatorStateOut(**asdict(state))
+
+
+@router.post("/stop", response_model=SimulatorStateOut)
+def stop_simulator(_current_user=Depends(require_role("admin"))) -> SimulatorStateOut:
+    state = simulator_service.stop()
+    return SimulatorStateOut(**asdict(state))
+
+
+@router.patch("/state", response_model=SimulatorStateOut)
+def update_simulator_state(
+    payload: SimulatorUpdateRequest,
+    _current_user=Depends(require_role("admin")),
+) -> SimulatorStateOut:
+    """Fine-grained slider control (rainfall/water level/road blockage)
+    without necessarily flipping active — lets an operator ramp conditions
+    up gradually rather than only jumping to the START DISASTER preset."""
+    state = simulator_service.set_state(
+        rainfall_mm=payload.rainfall_mm,
+        water_level_m=payload.water_level_m,
+        road_blockage_pct=payload.road_blockage_pct,
+    )
+    return SimulatorStateOut(**asdict(state))
+
+
+@router.post("/spawn-incidents", response_model=list[IncidentOut])
+def spawn_incidents(
+    payload: SpawnIncidentsRequest,
+    _current_user=Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+) -> list[IncidentOut]:
+    incidents = simulator_service.spawn_synthetic_incidents(
+        db, count=payload.count, max_people_affected=payload.max_people_affected
+    )
+    return [IncidentOut.model_validate(i) for i in incidents]
