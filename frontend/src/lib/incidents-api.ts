@@ -1,12 +1,37 @@
 import { apiFetch, apiFetchForm } from "@/lib/api";
 import type { Incident, IncidentStatus, SeverityLevel } from "@/types";
 
-export function listIncidents(token: string): Promise<Incident[]> {
-  return apiFetch<Incident[]>("/incidents", {}, token);
+export function listIncidents(
+  token: string,
+  params?: { sort?: "priority"; limit?: number }
+): Promise<Incident[]> {
+  const qs = new URLSearchParams();
+  if (params?.sort) qs.set("sort", params.sort);
+  if (params?.limit) qs.set("limit", String(params.limit));
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return apiFetch<Incident[]>(`/incidents${suffix}`, {}, token);
 }
 
 export function getIncident(id: number, token: string): Promise<Incident> {
   return apiFetch<Incident>(`/incidents/${id}`, {}, token);
+}
+
+export interface ManualIncidentInput {
+  type: string;
+  latitude: number;
+  longitude: number;
+  severity: string;
+  description?: string;
+  people_affected?: number;
+}
+
+/** Responder/admin logs a phoned-in incident (`POST /incidents`, JSON). */
+export function createIncident(input: ManualIncidentInput, token: string): Promise<Incident> {
+  return apiFetch<Incident>(
+    "/incidents",
+    { method: "POST", body: JSON.stringify(input) },
+    token
+  );
 }
 
 export function patchIncident(

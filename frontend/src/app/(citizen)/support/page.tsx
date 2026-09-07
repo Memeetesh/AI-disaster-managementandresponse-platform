@@ -2,21 +2,20 @@
 
 import { useState } from "react";
 import { Icon } from "@/components/citizen/Icon";
-import { lostFoundItems, authorityMessages, breathingExercises, groundingExercises } from "@/data/citizen-mock";
+import { lostFoundItems, breathingExercises, groundingExercises } from "@/data/citizen-mock";
 import { useToast } from "@/lib/toast-context";
+import { useAlerts } from "@/lib/queries";
+import { alertRelativeTime, alertSourceLabel } from "@/lib/alerts";
+import type { SeverityLevel } from "@/types";
 
 type Tab = "lost-found" | "authority" | "emotional";
 
-const priorityConfig = {
-  critical: { badge: "bg-danger-100 text-danger-700", dot: "bg-danger-500", label: "Critical" },
-  warning: { badge: "bg-warn-100 text-warn-700", dot: "bg-warn-500", label: "Warning" },
-  info: { badge: "bg-navy-100 text-navy-700", dot: "bg-navy-500", label: "Info" },
-};
-
-const sourceConfig = {
-  government: { label: "Government", icon: "Building2", color: "text-navy-600 bg-navy-50" },
-  ngo: { label: "NGO", icon: "HeartHandshake", color: "text-support-600 bg-support-50" },
-  local: { label: "Local", icon: "MapPin", color: "text-warn-600 bg-warn-50" },
+const alertSeverityConfig: Record<SeverityLevel, { badge: string; dot: string; label: string }> = {
+  low: { badge: "bg-navy-100 text-navy-700", dot: "bg-navy-500", label: "Low" },
+  moderate: { badge: "bg-warn-100 text-warn-700", dot: "bg-warn-500", label: "Moderate" },
+  high: { badge: "bg-danger-100 text-danger-700", dot: "bg-danger-500", label: "High" },
+  very_high: { badge: "bg-danger-100 text-danger-700", dot: "bg-danger-500", label: "Very high" },
+  critical: { badge: "bg-danger-600 text-white", dot: "bg-danger-600", label: "Critical" },
 };
 
 const typeConfig = {
@@ -27,6 +26,7 @@ const typeConfig = {
 
 export default function SupportPage() {
   const { addToast } = useToast();
+  const { data: alerts = [], isLoading: alertsLoading } = useAlerts();
   const [activeTab, setActiveTab] = useState<Tab>("lost-found");
   const [lfFilter, setLfFilter] = useState<"all" | "missing-person" | "found-person" | "belonging">("all");
   const [breathingActive, setBreathingActive] = useState<string | null>(null);
@@ -39,7 +39,9 @@ export default function SupportPage() {
       <div>
         <h1 className="text-2xl md:text-3xl font-bold text-navy-900">Support &amp; Recovery</h1>
         <p className="text-sm text-slate2-500 mt-1">Post-disaster assistance, communication, and emotional wellbeing.</p>
-        <span className="badge bg-slate2-100 text-slate2-500 text-[10px] mt-2">Sample data — not backend-wired yet</span>
+        <span className="badge bg-slate2-100 text-slate2-500 text-[10px] mt-2">
+          Lost &amp; Found and Emotional Support are still sample data
+        </span>
       </div>
 
       <div className="flex gap-1 p-1 bg-white rounded-2xl border border-slate2-100 shadow-[var(--shadow-card)] overflow-x-auto">
@@ -170,41 +172,51 @@ export default function SupportPage() {
           <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-navy-50 border border-navy-100">
             <Icon name="ShieldCheck" className="w-5 h-5 text-navy-600 flex-shrink-0" />
             <p className="text-sm text-navy-700">
-              <span className="font-semibold">Sample messages</span> — this feed will carry real verified government/NGO alerts once the alerts API lands.
+              Verified alerts from the command center and the disaster simulator. Updates live.
             </p>
           </div>
-          <div className="relative space-y-4">
-            <div className="absolute left-5 top-2 bottom-2 w-px bg-slate2-200" />
-            {authorityMessages.map((msg) => {
-              const pc = priorityConfig[msg.priority];
-              const sc = sourceConfig[msg.sourceType];
-              return (
-                <div key={msg.id} className="relative pl-12">
-                  <div className={`absolute left-3 top-4 w-5 h-5 rounded-full ${pc.dot} ring-4 ring-white flex items-center justify-center`}>
-                    <Icon name={sc.icon} className="w-2.5 h-2.5 text-white" />
-                  </div>
-                  <div className="card p-5 hover:shadow-[var(--shadow-card-hover)] transition-shadow">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className={`badge ${sc.color}`}>
-                          <Icon name={sc.icon} className="w-3 h-3" />
-                          {sc.label}
-                        </span>
-                        <span className={`badge ${pc.badge}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${pc.dot}`} />
-                          {pc.label}
+          {alertsLoading ? (
+            <div className="card p-6 text-sm text-slate2-500">Loading alerts…</div>
+          ) : alerts.length === 0 ? (
+            <div className="card p-8 text-center text-sm text-slate2-500">
+              No active alerts right now.
+            </div>
+          ) : (
+            <div className="relative space-y-4">
+              <div className="absolute left-5 top-2 bottom-2 w-px bg-slate2-200" />
+              {alerts.map((alert) => {
+                const sc = alertSeverityConfig[alert.severity];
+                return (
+                  <div key={alert.id} className="relative pl-12">
+                    <div className={`absolute left-3 top-4 w-5 h-5 rounded-full ${sc.dot} ring-4 ring-white flex items-center justify-center`}>
+                      <Icon name="Megaphone" className="w-2.5 h-2.5 text-white" />
+                    </div>
+                    <div className="card p-5 hover:shadow-[var(--shadow-card-hover)] transition-shadow">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="badge text-navy-600 bg-navy-50">
+                            <Icon name="Building2" className="w-3 h-3" />
+                            {alertSourceLabel(alert.source)}
+                          </span>
+                          <span className={`badge ${sc.badge}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
+                            {sc.label}
+                          </span>
+                        </div>
+                        <span className="text-xs text-slate2-400 flex-shrink-0">
+                          {alertRelativeTime(alert.issued_at)}
                         </span>
                       </div>
-                      <span className="text-xs text-slate2-400 flex-shrink-0">{msg.time}</span>
+                      <p className="text-sm font-semibold text-navy-800 mb-1 capitalize">
+                        {alert.type.replace(/_/g, " ")}
+                      </p>
+                      <p className="text-sm text-slate2-600 leading-relaxed">{alert.message}</p>
                     </div>
-                    <p className="text-sm font-bold text-navy-900 mb-1.5">{msg.source}</p>
-                    <p className="text-sm font-semibold text-navy-800 mb-1">{msg.title}</p>
-                    <p className="text-sm text-slate2-600 leading-relaxed">{msg.body}</p>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

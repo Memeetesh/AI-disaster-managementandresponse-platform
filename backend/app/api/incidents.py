@@ -7,6 +7,7 @@ from app.models.enums import IncidentStatus, IncidentType, SeverityLevel
 from app.models.user import User
 from app.schemas.incident import EvidenceOut, IncidentCreate, IncidentOut, IncidentUpdate
 from app.services import incidents as incidents_service
+from app.services import priority as priority_service
 from app.services.storage import save_upload
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
@@ -38,12 +39,14 @@ def list_incidents(
     status_filter: IncidentStatus | None = None,
     type_filter: IncidentType | None = None,
     severity_filter: SeverityLevel | None = None,
+    sort: str | None = None,
     limit: int = 50,
     offset: int = 0,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[IncidentOut]:
-    """Citizens see only their own reports; responders/admins see everything."""
+    """Citizens see only their own reports; responders/admins see everything.
+    `sort=priority` orders by the priority engine's score (highest first)."""
     rows = incidents_service.list_incidents_for_user(
         db,
         current_user,
@@ -53,7 +56,15 @@ def list_incidents(
         limit=limit,
         offset=offset,
     )
-    return [IncidentOut.model_validate(row) for row in rows]
+    priorities = priority_service.annotate_priorities(db, rows)
+    if sort == "priority":
+        rows.sort(key=lambda i: priorities.get(i.id, ("low", 0.0))[1], reverse=True)
+    return [
+        IncidentOut.model_validate(row).model_copy(
+            update={"priority": priorities.get(row.id, (None, 0.0))[0]}
+        )
+        for row in rows
+    ]
 
 
 @router.get("/{incident_id}", response_model=IncidentOut)

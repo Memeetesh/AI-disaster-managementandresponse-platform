@@ -21,6 +21,16 @@ class UserLogin(BaseModel):
     password: str
 
 
+class UserCreate(BaseModel):
+    """Admin-only provisioning of responder/admin accounts."""
+
+    name: str = Field(min_length=1, max_length=120)
+    phone: str = Field(min_length=6, max_length=20)
+    email: EmailStr | None = None
+    password: str = Field(min_length=8, max_length=128)
+    role: UserRole = UserRole.RESPONDER
+
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

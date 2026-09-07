@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Icon } from "./Icon";
-import { submitSOS } from "@/lib/incidents-api";
+import { useSubmitSOS } from "@/lib/queries";
 import type { LocationState } from "@/hooks/useLocation";
 
 interface SOSModalProps {
@@ -16,6 +16,7 @@ interface SOSModalProps {
 // <SOSModal .../>}`) rather than passing an `open` boolean — that way each
 // open is a fresh mount with fresh state, no reset-on-close effect needed.
 export function SOSModal({ onClose, onSent, token, location }: SOSModalProps) {
+  const submitSOS = useSubmitSOS();
   const [holdProgress, setHoldProgress] = useState(0);
   const [holding, setHolding] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -55,15 +56,12 @@ export function SOSModal({ onClose, onSent, token, location }: SOSModalProps) {
     }, 1000);
 
     try {
-      await submitSOS(
-        {
-          latitude: location.lat,
-          longitude: location.lon,
-          peopleAffected: 1,
-          description: "Emergency SOS sent from the DRISHTI app.",
-        },
-        token
-      );
+      await submitSOS.mutateAsync({
+        latitude: location.lat,
+        longitude: location.lon,
+        peopleAffected: 1,
+        description: "Emergency SOS sent from the DRISHTI app.",
+      });
       if (countdownRef.current) clearInterval(countdownRef.current);
       onSent();
     } catch {

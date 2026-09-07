@@ -7,13 +7,71 @@ import { emergencyQuickActions } from "@/data/citizen-mock";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast-context";
 import { useLocation } from "@/hooks/useLocation";
+import { useCheckIn, useMyCheckIn, useNearestShelters } from "@/lib/queries";
+import { alertRelativeTime } from "@/lib/alerts";
+import type { NearbyShelter } from "@/types";
+
+function openOnMap(shelter: NearbyShelter): void {
+  const { latitude: lat, longitude: lon } = shelter;
+  window.open(
+    `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`,
+    "_blank",
+    "noopener,noreferrer"
+  );
+}
 
 export default function EmergencyPage() {
   const { token } = useAuth();
   const { addToast } = useToast();
   const location = useLocation();
   const [sosOpen, setSosOpen] = useState(false);
-  const [safeConfirmed, setSafeConfirmed] = useState(false);
+
+  const lat = location.status === "ok" ? location.lat : null;
+  const lon = location.status === "ok" ? location.lon : null;
+  const { data: nearby = [] } = useNearestShelters(lat, lon, 5);
+  const checkIn = useCheckIn();
+  const { data: myCheckIn } = useMyCheckIn();
+
+  const nearestRescue = nearby[0] ?? null;
+  const nearestHospital = nearby.find((s) => s.facilities?.includes("medical")) ?? nearby[0] ?? null;
+  const isSafe = myCheckIn?.status === "safe";
+
+  function actionDetail(id: string): string {
+    if (id === "hospital") return nearestHospital ? `${nearestHospital.name} · ${nearestHospital.distance_km.toFixed(1)} km` : "Locating…";
+    if (id === "rescue") return nearestRescue ? `${nearestRescue.name} · ${nearestRescue.distance_km.toFixed(1)} km` : "Locating…";
+    return emergencyQuickActions.find((a) => a.id === id)?.detail ?? "";
+  }
+
+  function handleAction(id: string): void {
+    if (id === "helpline") {
+      window.location.assign("tel:112");
+      return;
+    }
+    if (id === "hospital" && nearestHospital) {
+      openOnMap(nearestHospital);
+      return;
+    }
+    if (id === "rescue" && nearestRescue) {
+      openOnMap(nearestRescue);
+      return;
+    }
+    if (id === "hospital" || id === "rescue") {
+      addToast("Waiting for your location to find the nearest facility.", "info");
+      return;
+    }
+    addToast("Offline maps aren't wired up yet — this is a demo action.", "info");
+  }
+
+  function handleSafe(): void {
+    checkIn.mutate(
+      { status: "safe", latitude: lat, longitude: lon },
+      {
+        onSuccess: () =>
+          addToast("You're marked as safe. Your approximate area has been shared.", "success"),
+        onError: () => addToast("Couldn't send your check-in. Try again.", "error"),
+      }
+    );
+  }
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -67,10 +125,7 @@ export default function EmergencyPage() {
         {emergencyQuickActions.map((action, idx) => (
           <button
             key={action.id}
-            onClick={() => {
-              if (action.id === "helpline") addToast("Calling 112...", "warning");
-              else addToast(`${action.label} — demo action, not wired to a real service yet.`, "info");
-            }}
+            onClick={() => handleAction(action.id)}
             className={`card card-hover card-glow p-5 flex items-start gap-4 text-left group stagger-${Math.min(idx + 1, 6)}`}
           >
             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${action.color} transition-transform group-hover:scale-110`}>
@@ -78,28 +133,29 @@ export default function EmergencyPage() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-navy-900">{action.label}</p>
-              <p className="text-xs text-slate2-500 mt-1">{action.detail}</p>
+              <p className="text-xs text-slate2-500 mt-1 truncate">{actionDetail(action.id)}</p>
             </div>
             <Icon name="ChevronRight" className="w-4 h-4 text-slate2-300 flex-shrink-0 mt-1 group-hover:text-navy-400 group-hover:translate-x-0.5 transition-all" />
           </button>
         ))}
       </div>
 
-      <div className="flex justify-center pt-2">
+      <div className="flex flex-col items-center gap-1.5 pt-2">
         <button
-          onClick={() => {
-            setSafeConfirmed(true);
-            addToast("Marked as safe.", "success");
-          }}
-          className={`flex items-center gap-2.5 px-6 py-3.5 rounded-2xl font-semibold text-sm transition-all duration-200 no-tap-highlight ${
-            safeConfirmed
+          onClick={handleSafe}
+          disabled={checkIn.isPending}
+          className={`flex items-center gap-2.5 px-6 py-3.5 rounded-2xl font-semibold text-sm transition-all duration-200 no-tap-highlight disabled:opacity-60 ${
+            isSafe
               ? "bg-safe-100 text-safe-700 border-2 border-safe-300"
               : "bg-white text-safe-700 border-2 border-safe-200 hover:border-safe-400 hover:bg-safe-50 active:scale-95"
           }`}
         >
-          <Icon name={safeConfirmed ? "CheckCircle2" : "ShieldCheck"} className="w-5 h-5" />
-          {safeConfirmed ? "You are marked as Safe" : "I am Safe"}
+          <Icon name={isSafe ? "CheckCircle2" : "ShieldCheck"} className="w-5 h-5" />
+          {checkIn.isPending ? "Sending…" : isSafe ? "You are marked as Safe" : "I am Safe"}
         </button>
+        {isSafe && myCheckIn && (
+          <p className="text-xs text-slate2-400">Checked in {alertRelativeTime(myCheckIn.created_at)}</p>
+        )}
       </div>
 
       {sosOpen && (

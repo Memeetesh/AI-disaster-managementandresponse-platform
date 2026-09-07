@@ -14,10 +14,11 @@ road blockage raises effective (in)accessibility. That's what makes
 severity — without needing a real IMD feed.
 """
 import random
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 
 from sqlalchemy.orm import Session
 
+from app.events.broker import broker
 from app.risk.demo_baseline import CHENNAI_DEMO_BBOX
 from app.services import incidents as incidents_service
 
@@ -61,6 +62,11 @@ def set_state(
         if v is not None
     }
     _state = replace(_state, **updates)
+    # Single chokepoint for every simulator mutation (start/stop/patch all
+    # route through here) — one place to emit the realtime event. The
+    # simulator feeds the risk formula, so nudge the map too.
+    broker.publish("simulator.updated", asdict(_state))
+    broker.publish("risk.updated", {"reason": "simulator"})
     return _state
 
 

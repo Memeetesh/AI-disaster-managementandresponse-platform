@@ -4,10 +4,15 @@ Prototype disaster-management platform. Demo hazard: **urban flooding**.
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full system design,
 schema, and build plan.
 
-Status: **Phase 3** — project setup, database schema, JWT auth, incidents/SOS/
-citizen reports, and a live risk map (PostGIS-backed risk zones + shelters)
-are done. AI analysis, the disaster simulator, priority engine, routing, and
-real-time updates land in later phases.
+Status: **Phase 4** — auth, incidents/SOS/citizen reports, the live risk map
+(PostGIS risk zones + shelters), the disaster simulator, real-time updates
+(SSE at `/api/v1/stream`), area-wide alerts, citizen safety check-ins,
+shelter-proximity search, the incident priority engine, and
+dispatch/routing (nearest-responder allocation, OSRM safe routes with a
+straight-line fallback, rescue-operation lifecycle) are done. The AI layer
+(CV/NLP/STT, LLM situation summary, confidence scoring) is the remaining
+"later phase" — every AI-labelled surface in the UI is currently an
+explicit placeholder.
 
 ## Repository layout
 
@@ -121,16 +126,17 @@ npm run dev
 2. `POST /api/v1/auth/login` with the same phone/password to get a JWT.
 3. Call `GET /api/v1/auth/me` with `Authorization: Bearer <token>` to confirm
    the token round-trips and the role is `citizen` — note that even if you
-   pass `"role": "admin"` at registration, the API silently forces `citizen`;
-   only a future admin-provisioning endpoint can grant elevated roles.
+   pass `"role": "admin"` at registration, the API silently forces `citizen`.
+   An existing admin can provision responder/admin accounts via
+   `POST /api/v1/users`.
 4. Run the demo-data seed (see above), then visit http://localhost:3000,
    sign in, and allow location access — the home page shows your current
    flood-risk zone and nearest shelters; `/sos` and `/report` submit real
    incidents.
 5. To see the command-center view, promote a user to `responder` or `admin`
-   directly in the database (self-registration only ever creates citizens):
-   `UPDATE users SET role = 'responder' WHERE phone = '<their phone>';` —
-   then sign in again and visit `/dashboard` for the live incident feed,
+   — either `POST /api/v1/users` as an existing admin, or directly in the
+   database: `UPDATE users SET role = 'responder' WHERE phone = '<phone>';`
+   — then sign in again and visit `/dashboard` for the live incident feed,
    risk-zone map (click a zone for its score breakdown), and shelter/incident
    pins.
 

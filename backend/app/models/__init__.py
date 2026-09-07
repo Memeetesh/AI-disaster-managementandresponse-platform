@@ -2,6 +2,7 @@
 see the full schema from a single import of `app.models`.
 """
 from app.models.alert import Alert
+from app.models.check_in import CheckIn
 from app.models.incident import Incident
 from app.models.incident_evidence import IncidentEvidence
 from app.models.rescue_operation import RescueOperation
@@ -13,6 +14,7 @@ from app.models.user import User
 
 __all__ = [
     "Alert",
+    "CheckIn",
     "Incident",
     "IncidentEvidence",
     "RescueOperation",

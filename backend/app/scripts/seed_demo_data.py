@@ -11,9 +11,12 @@ verified facility. Run once against a fresh database:
 """
 import argparse
 import logging
+from datetime import datetime, timezone
 
 from app.database import SessionLocal
 from app.gis.points import make_point
+from app.models.alert import Alert
+from app.models.responder import Responder
 from app.models.risk_zone import RiskZone
 from app.models.shelter import Shelter
 from app.risk.demo_baseline import CHENNAI_DEMO_BBOX, DEMO_CELL_SIZE_DEG, synthetic_baseline
@@ -71,6 +74,85 @@ DEMO_SHELTERS = [
 ]
 
 
+DEMO_ALERTS = [
+    {
+        "type": "flood_warning",
+        "severity": "high",
+        "message": (
+            "IMD (Demo): Heavy to very heavy rainfall likely over Chennai and suburbs in the next "
+            "24 hours. Residents in low-lying areas should move to higher ground and keep an "
+            "emergency kit ready."
+        ),
+    },
+    {
+        "type": "advisory",
+        "severity": "moderate",
+        "message": (
+            "City Disaster Cell (Demo): Note your nearest shelter, charge your phones, and keep "
+            "documents in a waterproof bag. Call 112 or use the SOS button if you need help."
+        ),
+    },
+]
+
+
+DEMO_RESPONDERS = [
+    {"name": "Boat Team Alpha (Demo)", "team": "NDRF-7", "latitude": 13.03, "longitude": 80.23, "vehicle": "boat", "capacity": 6},
+    {"name": "Ambulance Unit 12 (Demo)", "team": "108 EMRI", "latitude": 13.06, "longitude": 80.26, "vehicle": "ambulance", "capacity": 2},
+    {"name": "Rescue Truck Bravo (Demo)", "team": "Fire & Rescue", "latitude": 13.08, "longitude": 80.22, "vehicle": "truck", "capacity": 8},
+    {"name": "Boat Team Charlie (Demo)", "team": "SDRF", "latitude": 13.09, "longitude": 80.29, "vehicle": "boat", "capacity": 6},
+    {"name": "Foot Patrol Delta (Demo)", "team": "Civil Defence", "latitude": 13.05, "longitude": 80.25, "vehicle": "on_foot", "capacity": 3},
+]
+
+
+def seed_responders(db, force: bool) -> None:
+    existing = db.query(Responder).count()
+    if existing and not force:
+        logger.info("responders already has %d rows, skipping (use --force to reseed)", existing)
+        return
+    if existing:
+        db.query(Responder).delete()
+
+    for entry in DEMO_RESPONDERS:
+        db.add(
+            Responder(
+                name=entry["name"],
+                team=entry["team"],
+                latitude=entry["latitude"],
+                longitude=entry["longitude"],
+                location=make_point(entry["latitude"], entry["longitude"]),
+                status="available",
+                vehicle=entry["vehicle"],
+                capacity=entry["capacity"],
+            )
+        )
+    db.commit()
+    logger.info("seeded %d demo responders", len(DEMO_RESPONDERS))
+
+
+def seed_alerts(db, force: bool) -> None:
+    existing = db.query(Alert).count()
+    if existing and not force:
+        logger.info("alerts already has %d rows, skipping (use --force to reseed)", existing)
+        return
+    if existing:
+        db.query(Alert).delete()
+
+    now = datetime.now(timezone.utc)
+    for entry in DEMO_ALERTS:
+        db.add(
+            Alert(
+                source="admin",
+                type=entry["type"],
+                severity=entry["severity"],
+                message=entry["message"],
+                issued_at=now,
+                expires_at=None,
+            )
+        )
+    db.commit()
+    logger.info("seeded %d demo alerts", len(DEMO_ALERTS))
+
+
 def seed_risk_zones(db, force: bool) -> None:
     existing = db.query(RiskZone).count()
     if existing and not force:
@@ -122,6 +204,8 @@ def main() -> None:
     try:
         seed_risk_zones(db, args.force)
         seed_shelters(db, args.force)
+        seed_responders(db, args.force)
+        seed_alerts(db, args.force)
     finally:
         db.close()
 

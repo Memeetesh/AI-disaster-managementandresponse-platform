@@ -1,17 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Icon, getRiskColor, getRiskLabel, getRiskDot } from "@/components/citizen/Icon";
 import { LineChart } from "@/components/citizen/Charts";
 import { riskCards as mockRiskCards, riverLevelData, riverCourseData } from "@/data/citizen-mock";
 import { useAuth } from "@/lib/auth-context";
-import { useToast } from "@/lib/toast-context";
 import { useLocation } from "@/hooks/useLocation";
-import { getRiskMap } from "@/lib/risk-api";
-import { listShelters } from "@/lib/shelters-api";
-import { haversineDistanceKm, pointInPolygon } from "@/lib/geo";
-import type { RiskMapResponse, RiskZoneProperties, Shelter } from "@/types";
+import {
+  useAlerts,
+  useCycloneForecast,
+  useFloodForecast,
+  useLandslideForecast,
+  useNearestShelters,
+  useRainfallForecast,
+  useRiskMap,
+} from "@/lib/queries";
+import { alertRelativeTime, alertSourceLabel, topAlert } from "@/lib/alerts";
+import { pointInPolygon } from "@/lib/geo";
+import type { RiskMapResponse, RiskZoneProperties } from "@/types";
 import type { RiskCard, CitizenRiskLevel } from "@/types/citizen-ui";
+
+function relativeTime(ms: number): string {
+  if (!ms) return "—";
+  const secs = Math.round((Date.now() - ms) / 1000);
+  if (secs < 5) return "just now";
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  return `${Math.round(mins / 60)}h ago`;
+}
 
 const riskChartColors: Record<string, string> = {
   low: "#22c55e",
@@ -37,58 +54,94 @@ function toCitizenLevel(category: string): CitizenRiskLevel {
 }
 
 export default function HomePage() {
-  const { user, token } = useAuth();
-  const { addToast } = useToast();
+  const { user } = useAuth();
   const location = useLocation();
 
-  const [riskMap, setRiskMap] = useState<RiskMapResponse | null>(null);
-  const [shelters, setShelters] = useState<Shelter[]>([]);
+  // Realtime (src/lib/realtime.tsx) invalidates these on `risk.updated` /
+  // `alert.*`, so the flood card, shelter list, and alert banner stay live.
+  // On error the page still renders — it falls back to the demo risk cards.
+  const lat = location.status === "ok" ? location.lat : null;
+  const lon = location.status === "ok" ? location.lon : null;
 
-  useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    Promise.all([getRiskMap(token), listShelters(token)])
-      .then(([riskMapData, sheltersData]) => {
-        if (cancelled) return;
-        setRiskMap(riskMapData);
-        setShelters(sheltersData);
-      })
-      .catch(() => {
-        // Home page degrades to the demo risk cards below — no hard failure.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [token]);
+  const riskMapQuery = useRiskMap();
+  const alertsQuery = useAlerts();
+  const nearbyQuery = useNearestShelters(lat, lon, 3);
+  const rainfallQuery = useRainfallForecast(lat, lon);
+  const floodQuery = useFloodForecast(lat, lon);
+  const cycloneQuery = useCycloneForecast(lat, lon);
+  const landslideQuery = useLandslideForecast(lat, lon);
+  const riskMap: RiskMapResponse | null = riskMapQuery.data ?? null;
+  const activeAlert = topAlert(alertsQuery.data ?? []);
+  const nearestShelters = nearbyQuery.data ?? [];
+  const rainfall = rainfallQuery.data ?? null;
+  const flood = floodQuery.data ?? null;
+  const cyclone = cycloneQuery.data ?? null;
+  const landslide = landslideQuery.data ?? null;
 
   const currentZone =
     riskMap && location.status === "ok" ? findZoneForLocation(riskMap, location.lat, location.lon) : null;
 
-  // Only the "Flood" card reflects real backend data (the only hazard this
-  // demo actually models) — rainfall/cyclone/landslide stay as sample data
-  // since there's no real prediction source for them yet.
+  // Every card is now a live location forecast: "Flood" = seeded risk-zone
+  // score where it exists (simulator-aware) else GloFAS discharge; "Rainfall"
+  // / "Cyclone" / "Landslide" = Open-Meteo-derived indicators.
   const riskCards: RiskCard[] = mockRiskCards.map((card) => {
-    if (card.id !== "flood" || !currentZone) return card;
-    return {
-      ...card,
-      level: toCitizenLevel(currentZone.risk_category),
-      probability: Math.round(currentZone.risk_score),
-      recommendation:
-        currentZone.risk_category === "low"
-          ? "No action needed"
-          : currentZone.risk_category === "moderate"
-            ? "Stay alert"
-            : "Be prepared",
-    };
+    if (card.id === "flood" && currentZone) {
+      return {
+        ...card,
+        level: toCitizenLevel(currentZone.risk_category),
+        probability: Math.round(currentZone.risk_score),
+        recommendation:
+          currentZone.risk_category === "low"
+            ? "No action needed"
+            : currentZone.risk_category === "moderate"
+              ? "Stay alert"
+              : "Be prepared",
+      };
+    }
+    if (card.id === "flood" && flood) {
+      return {
+        ...card,
+        level: flood.level,
+        probability: flood.flood_risk_score,
+        recommendation: flood.recommendation,
+        trend: flood.trend.length > 1 ? flood.trend : card.trend,
+      };
+    }
+    if (card.id === "rainfall" && rainfall) {
+      return {
+        ...card,
+        level: rainfall.level,
+        probability: rainfall.probability,
+        recommendation: rainfall.recommendation,
+        trend: rainfall.trend.length > 1 ? rainfall.trend : card.trend,
+      };
+    }
+    if (card.id === "cyclone" && cyclone) {
+      return {
+        ...card,
+        level: cyclone.level,
+        probability: cyclone.cyclone_risk_score,
+        recommendation: cyclone.recommendation,
+        trend: cyclone.trend.length > 1 ? cyclone.trend : card.trend,
+      };
+    }
+    if (card.id === "landslide" && landslide) {
+      return {
+        ...card,
+        level: landslide.level,
+        probability: landslide.landslide_risk_score,
+        recommendation: landslide.recommendation,
+        trend: landslide.trend.length > 1 ? landslide.trend : card.trend,
+      };
+    }
+    return card;
   });
 
-  const nearestShelters = [...shelters]
-    .map((s) => ({
-      ...s,
-      distanceKm: location.status === "ok" ? haversineDistanceKm(location.lat, location.lon, s.latitude, s.longitude) : null,
-    }))
-    .sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity))
-    .slice(0, 3);
+  const liveCardIds = new Set<string>();
+  if (currentZone || flood) liveCardIds.add("flood");
+  if (rainfall) liveCardIds.add("rainfall");
+  if (cyclone) liveCardIds.add("cyclone");
+  if (landslide) liveCardIds.add("landslide");
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -108,31 +161,37 @@ export default function HomePage() {
           </div>
           <div className="flex items-center gap-2 text-xs text-navy-300 bg-white/5 backdrop-blur-sm px-3 py-2 rounded-xl self-start sm:self-end">
             <Icon name="Clock" className="w-3.5 h-3.5" />
-            <span>Last updated: just now</span>
+            <span>Last updated: {relativeTime(riskMapQuery.dataUpdatedAt)}</span>
           </div>
         </div>
       </div>
 
-      {/* Demo alert banner — sample content, not a live IMD/SACHET feed yet */}
-      <button
-        onClick={() => addToast("Live alert feeds land in a later phase — this is sample content.", "info")}
-        className="w-full group relative overflow-hidden rounded-2xl bg-gradient-to-r from-danger-500 to-danger-600 p-px text-left transition-all hover:scale-[1.01] active:scale-[0.99]"
-      >
-        <div className="relative rounded-2xl bg-gradient-to-r from-danger-50 to-danger-100 px-5 py-4 flex items-center gap-4">
-          <div className="relative w-12 h-12 rounded-2xl bg-danger-500 flex items-center justify-center shadow-lg shadow-danger-500/30 flex-shrink-0">
-            <Icon name="AlertTriangle" className="w-6 h-6 text-white" />
-          </div>
-          <div className="relative flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-0.5">
-              <span className="badge bg-danger-600 text-white text-[10px] py-0.5">SAMPLE ALERT</span>
-              <span className="text-xs font-medium text-danger-600">IMD Dehradun</span>
+      {/* Live area-wide alert — most severe active alert from GET /alerts */}
+      {activeAlert && (
+        <Link
+          href="/support"
+          className="w-full group relative overflow-hidden rounded-2xl bg-gradient-to-r from-danger-500 to-danger-600 p-px text-left transition-all hover:scale-[1.01] active:scale-[0.99] block"
+        >
+          <div className="relative rounded-2xl bg-gradient-to-r from-danger-50 to-danger-100 px-5 py-4 flex items-center gap-4">
+            <div className="relative w-12 h-12 rounded-2xl bg-danger-500 flex items-center justify-center shadow-lg shadow-danger-500/30 flex-shrink-0">
+              <Icon name="AlertTriangle" className="w-6 h-6 text-white" />
             </div>
-            <p className="text-sm font-bold text-danger-700">Heavy rainfall expected in the next 48 hours</p>
-            <p className="text-xs text-danger-600/80 mt-0.5">Demo content — live alerts land in a later phase</p>
+            <div className="relative flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className="badge bg-danger-600 text-white text-[10px] py-0.5 uppercase">
+                  {activeAlert.severity.replace("_", " ")}
+                </span>
+                <span className="text-xs font-medium text-danger-600">
+                  {alertSourceLabel(activeAlert.source)} · {alertRelativeTime(activeAlert.issued_at)}
+                </span>
+              </div>
+              <p className="text-sm font-bold text-danger-700 line-clamp-2">{activeAlert.message}</p>
+              <p className="text-xs text-danger-600/80 mt-0.5">Tap to see all authority messages</p>
+            </div>
+            <Icon name="ChevronRight" className="w-5 h-5 text-danger-400 group-hover:translate-x-1 transition-transform flex-shrink-0 relative" />
           </div>
-          <Icon name="ChevronRight" className="w-5 h-5 text-danger-400 group-hover:translate-x-1 transition-transform flex-shrink-0 relative" />
-        </div>
-      </button>
+        </Link>
+      )}
 
       <section>
         <div className="flex items-center gap-2 mb-3">
@@ -145,7 +204,21 @@ export default function HomePage() {
           {riskCards.map((card, idx) => {
             const rc = getRiskColor(card.level);
             const chartColor = riskChartColors[card.level] ?? "#3d5da0";
-            const isLive = card.id === "flood" && currentZone;
+            const isLive = liveCardIds.has(card.id);
+            const rainfallLive = card.id === "rainfall" && rainfall ? rainfall : null;
+            const cycloneLive = card.id === "cyclone" && cyclone ? cyclone : null;
+            const landslideLive = card.id === "landslide" && landslide ? landslide : null;
+            const floodLive = card.id === "flood" && !currentZone && flood ? flood : null;
+            let metric = "chance";
+            if (card.id === "flood") {
+              metric = currentZone
+                ? "risk score"
+                : floodLive?.anomaly_ratio != null
+                  ? `peak ${floodLive.anomaly_ratio}× normal`
+                  : floodLive
+                    ? "no major river nearby"
+                    : "risk score";
+            }
             return (
               <div key={card.id} className={`card card-hover card-glow p-5 group stagger-${Math.min(idx + 1, 4)}`}>
                 <div className="flex items-start justify-between mb-4">
@@ -162,8 +235,43 @@ export default function HomePage() {
                   {isLive && <span className="text-[9px] font-bold text-safe-600 uppercase">Live</span>}
                 </h3>
                 <div className="flex items-baseline gap-1.5 mb-3">
-                  <span className="text-3xl font-bold gradient-text">{card.probability}%</span>
-                  <span className="text-xs text-slate2-500">{isLive ? "risk score" : "chance"}</span>
+                  {rainfallLive ? (
+                    <>
+                      <span className="text-3xl font-bold gradient-text">{rainfallLive.rain_24h_mm}</span>
+                      <span className="text-xs text-slate2-500">
+                        mm next 24h · {rainfallLive.probability}% chance
+                      </span>
+                    </>
+                  ) : cycloneLive ? (
+                    <>
+                      <span className="text-3xl font-bold gradient-text">
+                        {Math.round(cycloneLive.peak_gust_kmh)}
+                      </span>
+                      <span className="text-xs text-slate2-500">
+                        km/h peak gusts
+                        {cycloneLive.min_pressure_hpa != null &&
+                          ` · min ${Math.round(cycloneLive.min_pressure_hpa)} hPa`}
+                      </span>
+                    </>
+                  ) : landslideLive ? (
+                    <>
+                      <span className="text-3xl font-bold gradient-text">
+                        {landslideLive.landslide_risk_score}%
+                      </span>
+                      <span className="text-xs text-slate2-500">
+                        {landslideLive.slope_degrees < 6
+                          ? "flat terrain"
+                          : `slope ${Math.round(landslideLive.slope_degrees)}° · ${Math.round(
+                              landslideLive.rain_trigger_mm
+                            )} mm rain`}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-3xl font-bold gradient-text">{card.probability}%</span>
+                      <span className="text-xs text-slate2-500">{isLive ? metric : "chance"}</span>
+                    </>
+                  )}
                 </div>
                 <div className="mb-3">
                   <LineChart data={card.trend} color={chartColor} height={44} />
@@ -182,9 +290,13 @@ export default function HomePage() {
           </div>
           <h2 className="text-lg font-bold text-navy-900">Nearby Shelters</h2>
         </div>
-        {!token || nearestShelters.length === 0 ? (
+        {nearestShelters.length === 0 ? (
           <div className="card p-6 text-sm text-slate2-500">
-            {location.status !== "ok" ? "Waiting for your location…" : "No shelters found nearby."}
+            {location.status !== "ok"
+              ? "Waiting for your location…"
+              : nearbyQuery.isLoading
+                ? "Finding shelters near you…"
+                : "No shelters found nearby."}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -192,9 +304,7 @@ export default function HomePage() {
               <div key={s.id} className="card p-5">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-bold text-navy-900">{s.name}</p>
-                  {s.distanceKm !== null && (
-                    <span className="text-xs font-mono text-slate2-500">{s.distanceKm.toFixed(1)} km</span>
-                  )}
+                  <span className="text-xs font-mono text-slate2-500">{s.distance_km.toFixed(1)} km</span>
                 </div>
                 <p className="text-xs text-slate2-500">
                   {s.occupied}/{s.capacity} occupied · {s.accessibility ?? "accessibility unknown"} · {s.status}

@@ -1,39 +1,120 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "./Icon";
-import { notifications } from "@/data/citizen-mock";
 import { useAuth } from "@/lib/auth-context";
+import { useAlerts, useMyReports } from "@/lib/queries";
+import { alertRelativeTime, alertSourceLabel, SEVERITY_RANK } from "@/lib/alerts";
 import { useOutsideClick } from "@/hooks/useOutsideClick";
+import type { IncidentStatus } from "@/types";
+
+const SEEN_KEY = "drishti_notifs_seen";
+
+function loadSeen(): Set<string> {
+  try {
+    const raw = window.localStorage.getItem(SEEN_KEY);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function persistSeen(seen: Set<string>): void {
+  try {
+    window.localStorage.setItem(SEEN_KEY, JSON.stringify([...seen].slice(-200)));
+  } catch {
+    // private mode / storage disabled — unread state just won't persist
+  }
+}
+
+const INCIDENT_NOTE: Partial<Record<IncidentStatus, string>> = {
+  verified: "was verified by a responder",
+  rejected: "was reviewed and not verified",
+  in_progress: "has a response in progress",
+  resolved: "was marked resolved",
+};
+
+interface Note {
+  id: string;
+  kind: "alert" | "incident";
+  title: string;
+  body: string;
+  iso: string;
+  rank: number;
+  href: string;
+}
 
 export function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const { user, signOut } = useAuth();
   const router = useRouter();
+  const { data: alerts = [] } = useAlerts();
+  const { data: myReports = [] } = useMyReports();
+
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [seen, setSeen] = useState<Set<string>>(() =>
+    typeof window === "undefined" ? new Set() : loadSeen()
+  );
   const notifRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
 
   useOutsideClick(notifRef, () => setNotifOpen(false));
   useOutsideClick(profileRef, () => setProfileOpen(false));
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const notes = useMemo<Note[]>(() => {
+    const fromAlerts: Note[] = alerts.map((a) => ({
+      id: `alert-${a.id}`,
+      kind: "alert",
+      title: `${alertSourceLabel(a.source)} · ${a.severity.replace("_", " ")}`,
+      body: a.message,
+      iso: a.issued_at,
+      rank: SEVERITY_RANK[a.severity] ?? 0,
+      href: "/support",
+    }));
+    const fromReports: Note[] = myReports
+      .filter((i) => INCIDENT_NOTE[i.status])
+      .map((i) => ({
+        id: `incident-${i.id}-${i.status}`,
+        kind: "incident",
+        title: `Your report #${i.id}`,
+        body: `Report #${i.id} (${i.type}) ${INCIDENT_NOTE[i.status]}.`,
+        iso: i.verified_at ?? i.created_at,
+        rank: 2,
+        href: "/reports",
+      }));
+    return [...fromAlerts, ...fromReports].sort(
+      (a, b) => new Date(b.iso).getTime() - new Date(a.iso).getTime()
+    );
+  }, [alerts, myReports]);
+
+  const unreadCount = notes.filter((n) => !seen.has(n.id)).length;
   const firstName = user?.name?.split(" ")[0] ?? "there";
   const initial = user?.name?.[0]?.toUpperCase() ?? "?";
+
+  function markAllSeen() {
+    if (notes.length === 0) return;
+    setSeen((prev) => {
+      const next = new Set(prev);
+      notes.forEach((n) => next.add(n.id));
+      persistSeen(next);
+      return next;
+    });
+  }
+
+  function openNotifs() {
+    const next = !notifOpen;
+    setNotifOpen(next);
+    if (next) markAllSeen();
+  }
 
   function handleSignOut() {
     signOut();
     router.push("/login");
   }
 
-  const priorityColor = (p: string) => {
-    switch (p) {
-      case "critical": return "bg-danger-500";
-      case "warning": return "bg-warn-500";
-      default: return "bg-navy-500";
-    }
-  };
+  const dot = (rank: number) =>
+    rank >= 4 ? "bg-danger-500" : rank >= 2 ? "bg-warn-500" : "bg-navy-500";
 
   return (
     <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate2-100">
@@ -51,7 +132,7 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
         <div className="flex items-center gap-2 md:gap-3">
           <div className="relative" ref={notifRef}>
             <button
-              onClick={() => setNotifOpen(!notifOpen)}
+              onClick={openNotifs}
               className="relative p-2 rounded-xl hover:bg-slate2-100 transition-colors text-navy-700"
               aria-label="Notifications"
             >
@@ -66,21 +147,40 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
               <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-[var(--shadow-card-lg)] border border-slate2-100 overflow-hidden animate-slide-up">
                 <div className="px-4 py-3 border-b border-slate2-100 flex items-center justify-between">
                   <p className="text-sm font-semibold text-navy-900">Notifications</p>
-                  <span className="text-xs text-slate2-500">{unreadCount} unread</span>
+                  <span className="text-xs text-slate2-500">{notes.length} recent</span>
                 </div>
                 <div className="max-h-80 overflow-y-auto">
-                  {notifications.map((n) => (
-                    <div key={n.id} className={`px-4 py-3 border-b border-slate2-50 hover:bg-slate2-50 transition-colors cursor-pointer ${!n.read ? "bg-navy-50/40" : ""}`}>
-                      <div className="flex items-start gap-2.5">
-                        <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${priorityColor(n.priority)}`} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-navy-800">{n.title}</p>
-                          <p className="text-xs text-slate2-600 mt-0.5">{n.body}</p>
-                          <p className="text-[11px] text-slate2-400 mt-1">{n.time}</p>
+                  {notes.length === 0 ? (
+                    <p className="px-4 py-6 text-center text-sm text-slate2-500">
+                      Nothing new. Alerts and updates on your reports show up here.
+                    </p>
+                  ) : (
+                    notes.slice(0, 20).map((n) => (
+                      <button
+                        key={n.id}
+                        onClick={() => {
+                          setNotifOpen(false);
+                          router.push(n.href);
+                        }}
+                        className="w-full text-left px-4 py-3 border-b border-slate2-50 hover:bg-slate2-50 transition-colors"
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${dot(n.rank)}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-navy-800 flex items-center gap-1.5">
+                              <Icon
+                                name={n.kind === "alert" ? "Megaphone" : "FileText"}
+                                className="w-3.5 h-3.5 text-slate2-400"
+                              />
+                              {n.title}
+                            </p>
+                            <p className="text-xs text-slate2-600 mt-0.5 line-clamp-2">{n.body}</p>
+                            <p className="text-[11px] text-slate2-400 mt-1">{alertRelativeTime(n.iso)}</p>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  ))}
+                      </button>
+                    ))
+                  )}
                 </div>
               </div>
             )}
