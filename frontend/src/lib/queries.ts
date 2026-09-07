@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { createAlert, listAlerts, type CreateAlertInput } from "@/lib/alerts-api";
+import { sendSupportChat, type ChatMessage } from "@/lib/chat-api";
 import { createCheckIn, getMyCheckIn, type CheckInInput } from "@/lib/checkin-api";
 import {
   createIncident,
@@ -361,6 +362,14 @@ export function usePatchShelter() {
     mutationFn: (vars: { id: number; update: { status?: string; occupied?: number } }) =>
       patchShelter(vars.id, token as string, vars.update),
     onSuccess: () => void qc.invalidateQueries({ queryKey: queryKeys.shelters() }),
+  });
+}
+
+/** Support-chat companion turn (`POST /chat/support`). No cache — one round-trip. */
+export function useSupportChat() {
+  const { token } = useAuth();
+  return useMutation({
+    mutationFn: (messages: ChatMessage[]) => sendSupportChat(messages, token as string),
   });
 }
 

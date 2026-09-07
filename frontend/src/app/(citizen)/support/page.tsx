@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Icon } from "@/components/citizen/Icon";
+import { SupportChat } from "@/components/citizen/SupportChat";
 import { lostFoundItems, breathingExercises, groundingExercises } from "@/data/citizen-mock";
 import { useToast } from "@/lib/toast-context";
 import { useAlerts } from "@/lib/queries";
@@ -31,6 +32,7 @@ export default function SupportPage() {
   const [lfFilter, setLfFilter] = useState<"all" | "missing-person" | "found-person" | "belonging">("all");
   const [breathingActive, setBreathingActive] = useState<string | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const filteredItems = lfFilter === "all" ? lostFoundItems : lostFoundItems.filter((i) => i.type === lfFilter);
 
@@ -296,8 +298,10 @@ export default function SupportPage() {
                   <Icon name="Headphones" className="w-5.5 h-5.5 text-support-600" />
                 </div>
                 <p className="text-sm font-bold text-navy-900 mb-1">Talk to Someone</p>
-                <p className="text-xs text-slate2-500 mb-4">Connect with a trained support volunteer who can listen and help.</p>
-                <button onClick={() => addToast("Live volunteer chat isn't wired up yet.", "info")} className="btn w-full bg-support-600 text-white hover:bg-support-700">
+                <p className="text-xs text-slate2-500 mb-4">
+                  Chat with Saathi, a supportive AI companion that can listen and share simple coping ideas.
+                </p>
+                <button onClick={() => setChatOpen(true)} className="btn w-full bg-support-600 text-white hover:bg-support-700">
                   <Icon name="MessagesSquare" className="w-4 h-4" />
                   Start Conversation
                 </button>
@@ -371,6 +375,8 @@ export default function SupportPage() {
           </div>
         </div>
       )}
+
+      {chatOpen && <SupportChat onClose={() => setChatOpen(false)} />}
     </div>
   );
 }

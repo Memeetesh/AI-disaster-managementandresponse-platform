@@ -31,7 +31,11 @@ class Settings(BaseSettings):
 
     # --- External integrations (all optional; app must degrade gracefully) ---
     IMD_API_KEY: str | None = None
+    # LLM for the Support chat companion. Without LLM_API_KEY the chat falls
+    # back to a fixed supportive message + helplines.
     LLM_API_KEY: str | None = None
+    LLM_PROVIDER: str = "gemini"  # gemini | openai | openrouter
+    LLM_MODEL: str = "gemini-3.6-flash"
     OSRM_URL: str = "http://localhost:5000"
     SUPABASE_URL: str | None = None
     SUPABASE_ANON_KEY: str | None = None
