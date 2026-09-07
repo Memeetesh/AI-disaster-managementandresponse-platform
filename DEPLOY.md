@@ -61,13 +61,10 @@ git push origin main
      | `DATABASE_URL` | the value you copied in Step 1 |
      | `LLM_API_KEY` | your Gemini key (optional — skip to disable the chatbot) |
    - Click **Save Changes**. Render redeploys automatically.
-6. Watch **Logs**. Wait until you see `Application startup complete`.
-7. Add the demo data. Open the service → **Shell** tab → run:
-   ```
-   python -m app.scripts.seed_demo_data
-   ```
-   It should print lines like `seeded 25 risk zones`.
-8. At the top of the service page, copy its address, e.g.
+6. Watch **Logs**. On every deploy the backend runs the migrations and loads
+   the demo data automatically (25 risk zones, 5 shelters, 5 responders, 2
+   alerts), then starts. Wait until you see `Application startup complete`.
+7. At the top of the service page, copy its address, e.g.
    `https://drishti-api.onrender.com`.
 
 **COPY THIS** — call it `BACKEND_URL`.
@@ -138,5 +135,9 @@ Done. Your site is live.
 ## Updating later
 
 - Push to `main` → Vercel and Render redeploy by themselves.
-- To reset the demo data: Render → **Shell** →
-  `python -m app.scripts.seed_demo_data --force`
+- To reset the demo data, run this from your own machine (Render's free tier
+  has no shell):
+  ```
+  cd backend
+  DATABASE_URL="<your Supabase session-pooler URL>" venv/bin/python -m app.scripts.seed_demo_data --force
+  ```

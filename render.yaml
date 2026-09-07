@@ -14,9 +14,11 @@ services:
     rootDir: backend
     plan: free
     buildCommand: pip install -r requirements.txt
-    # One worker only — the SSE broker keeps state in-process. Migrations run
-    # on boot (alembic is a no-op when already at head).
-    startCommand: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1"
+    # One worker only — the SSE broker keeps state in-process. On every boot:
+    # run migrations (no-op when already at head), then seed the demo data
+    # (idempotent — skips tables that already have rows). Render's free tier
+    # has no shell, so this is how the demo data gets in.
+    startCommand: sh -c "alembic upgrade head && python -m app.scripts.seed_demo_data && uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1"
     healthCheckPath: /api/v1/health
     envVars:
       - key: PYTHON_VERSION
