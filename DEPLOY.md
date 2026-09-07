@@ -32,11 +32,14 @@ git push origin main
    - Pick the region closest to you.
    - Click **Create new project** and wait ~2 minutes.
 3. In the left sidebar: **Project Settings** (gear icon) → **Database**.
-4. Find **Connection string**, choose the **URI** tab, and click copy.
-   It looks like:
-   `postgresql://postgres.abcd:YOUR-PASSWORD@aws-0-xxx.pooler.supabase.com:6543/postgres`
-5. If the string shows `[YOUR-PASSWORD]`, replace that part with the password
-   from step 2.
+4. Find **Connection string**. Switch the mode selector to **Session pooler**
+   (NOT "Direct connection" — that one is IPv6-only and Render can't reach it).
+   Copy the URI. It looks like:
+   `postgresql://postgres.abcd1234:[YOUR-PASSWORD]@aws-0-xxx.pooler.supabase.com:5432/postgres`
+5. Replace `[YOUR-PASSWORD]` with the password from step 2.
+
+   Use **Session pooler (port 5432)**. Do not use the Transaction pooler
+   (port 6543) — it breaks database migrations for this app.
 
 **COPY THIS** — call it `DATABASE_URL`.
 
