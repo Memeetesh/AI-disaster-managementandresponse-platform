@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# $PORT is injected by most PaaS hosts (Render/Railway); defaults to 8000 locally.
+# ONE worker only: the SSE broker (app/events/broker.py) is in-process state.
 EXPOSE 8000
-
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]

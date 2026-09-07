@@ -4,9 +4,12 @@ Never hard-code secrets here. Every value has a safe local-dev default so the
 app boots without a .env file, but production deployments must override
 JWT_SECRET and DATABASE_URL at minimum.
 """
+import json
 from functools import lru_cache
+from typing import Annotated
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -16,10 +19,33 @@ class Settings(BaseSettings):
     APP_NAME: str = "DRISHTI"
     ENVIRONMENT: str = "development"
     API_PREFIX: str = "/api/v1"
-    CORS_ORIGINS: list[str] = ["http://localhost:3000"]
+    # Accepts a JSON array OR a plain comma-separated list in the env var, e.g.
+    #   CORS_ORIGINS=https://app.vercel.app,https://app-git-main.vercel.app
+    CORS_ORIGINS: Annotated[list[str], NoDecode] = ["http://localhost:3000"]
 
     # --- Database (PostgreSQL + PostGIS, e.g. Supabase) ---
+    # A bare `postgres://` / `postgresql://` URL (what Supabase/Heroku hand out)
+    # is auto-rewritten to the `postgresql+psycopg2://` form SQLAlchemy needs.
     DATABASE_URL: str = "postgresql+psycopg2://drishti:drishti@localhost:5432/drishti"
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def _parse_cors_origins(cls, v: object) -> object:
+        if isinstance(v, str):
+            s = v.strip()
+            if s.startswith("["):
+                return json.loads(s)
+            return [o.strip() for o in s.split(",") if o.strip()]
+        return v
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def _normalise_database_url(cls, v: object) -> object:
+        if isinstance(v, str) and v.startswith(("postgres://", "postgresql://")):
+            return v.replace("postgres://", "postgresql+psycopg2://", 1).replace(
+                "postgresql://", "postgresql+psycopg2://", 1
+            )
+        return v
 
     # --- Auth ---
     JWT_SECRET: str = "dev-only-insecure-secret-change-me"
