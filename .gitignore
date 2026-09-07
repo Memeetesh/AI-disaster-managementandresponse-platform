@@ -21,3 +21,8 @@ frontend/next-env.d.ts.bak
 # OS / editor
 .DS_Store
 *.swp
+
+# Claude Code / assistant config
+CLAUDE.md
+**/CLAUDE.md
+.claude/
