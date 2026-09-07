@@ -33,6 +33,8 @@ class IncidentOut(BaseModel):
     people_affected: int
     created_at: datetime
     verified_at: datetime | None
+    # Computed by the priority engine on the list endpoint (null elsewhere).
+    priority: str | None = None
     evidence: list[EvidenceOut] = []
 
 

@@ -1,15 +1,28 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
-import { listIncidents, patchIncident } from "@/lib/incidents-api";
-import { getRiskMap } from "@/lib/risk-api";
-import { listShelters } from "@/lib/shelters-api";
+import { useRealtimeStatus } from "@/lib/realtime";
+import {
+  queryKeys,
+  useDashboardStats,
+  useDispatch,
+  useIncidents,
+  useRescueOps,
+  useResponders,
+  useRiskMap,
+  useShelters,
+  useUpdateIncident,
+} from "@/lib/queries";
 import { RiskMap } from "@/components/map/RiskMap";
 import { SimulatorPanel } from "@/components/simulator/SimulatorPanel";
+import { AlertComposer } from "@/components/dashboard/AlertComposer";
+import { RescueOpsPanel } from "@/components/dashboard/RescueOpsPanel";
+import { ManualIncidentForm } from "@/components/dashboard/ManualIncidentForm";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
-import type { Incident, RiskMapResponse, RiskZoneProperties, SeverityLevel, Shelter } from "@/types";
+import type { PriorityLevel, RiskZoneProperties, SeverityLevel } from "@/types";
 
 const SEVERITY_TONE: Record<SeverityLevel, BadgeTone> = {
   low: "low",
@@ -19,7 +32,12 @@ const SEVERITY_TONE: Record<SeverityLevel, BadgeTone> = {
   critical: "critical",
 };
 
-const OPEN_STATUSES = new Set(["reported", "ai_verified", "human_review", "verified", "in_progress"]);
+const PRIORITY_TONE: Record<PriorityLevel, BadgeTone> = {
+  low: "low",
+  medium: "moderate",
+  high: "high",
+  critical: "critical",
+};
 
 const RISK_LEGEND: { category: string; label: string; color: string }[] = [
   { category: "low", label: "Low", color: "#16a34a" },
@@ -32,37 +50,27 @@ const RISK_LEGEND: { category: string; label: string; color: string }[] = [
 export default function DashboardPage() {
   const { user, token, loading } = useAuth();
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const { connected } = useRealtimeStatus();
 
-  const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [riskMap, setRiskMap] = useState<RiskMapResponse | undefined>(undefined);
-  const [shelters, setShelters] = useState<Shelter[]>([]);
   const [selectedZone, setSelectedZone] = useState<RiskZoneProperties | null>(null);
-  const [dataLoading, setDataLoading] = useState(true);
-  const [actionError, setActionError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    if (!token) return;
-    setDataLoading(true);
-    try {
-      const [incidentsData, riskMapData, sheltersData] = await Promise.all([
-        listIncidents(token),
-        getRiskMap(token),
-        listShelters(token),
-      ]);
-      setIncidents(incidentsData);
-      setRiskMap(riskMapData);
-      setShelters(sheltersData);
-    } catch {
-      // Degrading to "no data" beats crashing the whole operator screen.
-    } finally {
-      setDataLoading(false);
-    }
-  }, [token]);
+  const incidentsQuery = useIncidents({ sort: "priority" });
+  const riskMapQuery = useRiskMap();
+  const sheltersQuery = useShelters();
+  const respondersQuery = useResponders();
+  const rescueOpsQuery = useRescueOps();
+  const statsQuery = useDashboardStats();
+  const updateIncident = useUpdateIncident();
+  const dispatch = useDispatch();
 
-  // Server-side authorization is what actually protects the data (every
-  // /incidents, /risk-map, /shelters call re-checks the role in FastAPI);
-  // this redirect is just so a citizen doesn't land on an empty operator
-  // screen.
+  const incidents = incidentsQuery.data ?? [];
+  const riskMap = riskMapQuery.data;
+  const shelters = sheltersQuery.data ?? [];
+  const responders = respondersQuery.data ?? [];
+  const rescueOps = rescueOpsQuery.data ?? [];
+  const incidentsLoading = incidentsQuery.isLoading;
+
   useEffect(() => {
     if (loading) return;
     if (!user) {
@@ -71,69 +79,50 @@ export default function DashboardPage() {
     }
     if (user.role !== "responder" && user.role !== "admin") {
       router.replace("/");
-      return;
     }
-    if (!token) return;
+  }, [loading, user, router]);
 
-    let cancelled = false;
-    Promise.all([listIncidents(token), getRiskMap(token), listShelters(token)])
-      .then(([incidentsData, riskMapData, sheltersData]) => {
-        if (cancelled) return;
-        setIncidents(incidentsData);
-        setRiskMap(riskMapData);
-        setShelters(sheltersData);
-      })
-      .catch(() => {
-        // Degrading to "no data" beats crashing the whole operator screen.
-      })
-      .finally(() => {
-        if (!cancelled) setDataLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [loading, user, token, router]);
+  function refresh() {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.incidents() });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.riskMap() });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.shelters() });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.responders() });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.rescueOps() });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.dashboardStats() });
+  }
 
-  async function handleVerify(id: number, status: "verified" | "rejected") {
-    if (!token) return;
-    setActionError(null);
-    try {
-      const updated = await patchIncident(id, token, { status });
-      setIncidents((prev) => prev.map((i) => (i.id === id ? updated : i)));
-    } catch {
-      setActionError("Could not update incident status.");
-    }
+  function handleVerify(id: number, status: "verified" | "rejected") {
+    updateIncident.mutate({ id, update: { status } });
   }
 
   if (loading || !user || (user.role !== "responder" && user.role !== "admin")) {
     return <div className="px-4 py-8 text-sm text-slate-500">Loading command center…</div>;
   }
 
-  const activeCount = incidents.filter((i) => OPEN_STATUSES.has(i.status)).length;
-  const criticalCount = incidents.filter(
-    (i) => OPEN_STATUSES.has(i.status) && i.severity === "critical"
-  ).length;
-  const peopleAffected = incidents
-    .filter((i) => OPEN_STATUSES.has(i.status))
-    .reduce((sum, i) => sum + i.people_affected, 0);
-  const sheltersAvailable = shelters.filter((s) => s.status === "open").length;
-
+  const s = statsQuery.data;
+  const dash = (v: number | undefined) => (v === undefined ? "—" : String(v));
   const stats = [
-    { label: "Active incidents", value: String(activeCount) },
-    { label: "Critical incidents", value: String(criticalCount) },
-    { label: "People affected", value: String(peopleAffected) },
-    { label: "Responders available", value: "—" },
-    { label: "Rescues completed", value: "—" },
-    { label: "Shelters available", value: dataLoading ? "—" : String(sheltersAvailable) },
+    { label: "Active incidents", value: dash(s?.active_incidents) },
+    { label: "Critical incidents", value: dash(s?.critical_incidents) },
+    { label: "People affected", value: dash(s?.people_affected) },
+    { label: "Responders available", value: dash(s?.responders_available) },
+    { label: "Rescues completed", value: dash(s?.rescues_completed) },
+    { label: "Shelters available", value: dash(s?.shelters_available) },
   ];
+
+  const dispatchedIncidentIds = new Set(
+    rescueOps
+      .filter((o) => o.status !== "completed" && o.status !== "cancelled")
+      .map((o) => o.incident_id)
+  );
 
   return (
     <div className="flex h-[calc(100vh-57px)] flex-col">
       <div className="grid grid-cols-2 gap-px bg-slate-800 sm:grid-cols-3 lg:grid-cols-6">
-        {stats.map((s) => (
-          <div key={s.label} className="bg-slate-950 px-4 py-3">
-            <div className="text-2xl font-bold text-white">{s.value}</div>
-            <div className="text-xs text-slate-500">{s.label}</div>
+        {stats.map((stat) => (
+          <div key={stat.label} className="bg-slate-950 px-4 py-3">
+            <div className="text-2xl font-bold text-white">{stat.value}</div>
+            <div className="text-xs text-slate-500">{stat.label}</div>
           </div>
         ))}
       </div>
@@ -145,6 +134,8 @@ export default function DashboardPage() {
             riskMap={riskMap}
             incidents={incidents}
             shelters={shelters}
+            responders={responders}
+            rescueOps={rescueOps}
             onZoneClick={setSelectedZone}
           />
 
@@ -157,6 +148,20 @@ export default function DashboardPage() {
                   {l.label}
                 </span>
               ))}
+            </div>
+            <div className="mt-1 flex flex-wrap gap-2 border-t border-slate-800 pt-1 text-slate-400">
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: "#22c55e" }} />
+                Responder
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: "#0ea5e9" }} />
+                Shelter
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-0.5 w-3" style={{ backgroundColor: "#f59e0b" }} />
+                Route
+              </span>
             </div>
             <div className="mt-1 text-[10px] text-slate-500">
               Baseline hazard/population/infra inputs are synthetic demo data.
@@ -206,22 +211,37 @@ export default function DashboardPage() {
         <aside className="flex w-[28rem] shrink-0 flex-col overflow-y-auto border-l border-slate-800 bg-slate-900/60">
           <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
-              Incidents
+              Incidents · by priority
             </h2>
             <div className="flex items-center gap-2">
-              <Badge tone="neutral">Priority sort — later phase</Badge>
-              <button
-                onClick={() => void refresh()}
-                className="text-xs text-slate-400 hover:text-white"
+              <span
+                className={`flex items-center gap-1 text-[10px] font-semibold uppercase ${
+                  connected ? "text-emerald-400" : "text-amber-400"
+                }`}
+                title={connected ? "Live updates connected" : "Reconnecting to live updates"}
               >
+                <span
+                  className={`inline-block h-1.5 w-1.5 rounded-full ${
+                    connected ? "bg-emerald-400" : "bg-amber-400 animate-pulse"
+                  }`}
+                />
+                {connected ? "Live" : "Reconnecting"}
+              </span>
+              <button onClick={refresh} className="text-xs text-slate-400 hover:text-white">
                 Refresh
               </button>
             </div>
           </div>
 
-          {actionError && <p className="px-4 pt-2 text-xs text-red-400">{actionError}</p>}
+          {(updateIncident.isError || dispatch.isError) && (
+            <p className="px-4 pt-2 text-xs text-red-400">
+              {dispatch.error instanceof Error
+                ? dispatch.error.message
+                : "Could not update incident status."}
+            </p>
+          )}
 
-          {dataLoading ? (
+          {incidentsLoading ? (
             <p className="p-4 text-sm text-slate-500">Loading incidents…</p>
           ) : incidents.length === 0 ? (
             <p className="p-4 text-sm text-slate-500">No incidents reported yet.</p>
@@ -233,7 +253,12 @@ export default function DashboardPage() {
                     <span className="text-sm font-semibold text-white">
                       #{incident.id} · {incident.type}
                     </span>
-                    <Badge tone={SEVERITY_TONE[incident.severity]}>{incident.severity}</Badge>
+                    <div className="flex items-center gap-1.5">
+                      {incident.priority && (
+                        <Badge tone={PRIORITY_TONE[incident.priority]}>P: {incident.priority}</Badge>
+                      )}
+                      <Badge tone={SEVERITY_TONE[incident.severity]}>{incident.severity}</Badge>
+                    </div>
                   </div>
                   <p className="mt-1 text-xs text-slate-500">
                     {incident.people_affected} affected · {incident.latitude.toFixed(4)},{" "}
@@ -242,23 +267,37 @@ export default function DashboardPage() {
                   {incident.description && (
                     <p className="mt-1 text-sm text-slate-300">{incident.description}</p>
                   )}
-                  <div className="mt-2 flex items-center gap-2">
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
                     <Badge tone="neutral">{incident.status}</Badge>
                     {incident.status === "reported" && (
                       <>
                         <button
                           onClick={() => handleVerify(incident.id, "verified")}
-                          className="rounded bg-emerald-800/60 px-2 py-1 text-xs font-semibold text-emerald-200 hover:bg-emerald-700/60"
+                          disabled={updateIncident.isPending}
+                          className="rounded bg-emerald-800/60 px-2 py-1 text-xs font-semibold text-emerald-200 hover:bg-emerald-700/60 disabled:opacity-50"
                         >
                           Verify
                         </button>
                         <button
                           onClick={() => handleVerify(incident.id, "rejected")}
-                          className="rounded bg-slate-800 px-2 py-1 text-xs font-semibold text-slate-300 hover:bg-slate-700"
+                          disabled={updateIncident.isPending}
+                          className="rounded bg-slate-800 px-2 py-1 text-xs font-semibold text-slate-300 hover:bg-slate-700 disabled:opacity-50"
                         >
                           Reject
                         </button>
                       </>
+                    )}
+                    {incident.status === "verified" && !dispatchedIncidentIds.has(incident.id) && (
+                      <button
+                        onClick={() => dispatch.mutate(incident.id)}
+                        disabled={dispatch.isPending}
+                        className="rounded bg-amber-700/70 px-2 py-1 text-xs font-semibold text-amber-100 hover:bg-amber-600/70 disabled:opacity-50"
+                      >
+                        Dispatch
+                      </button>
+                    )}
+                    {dispatchedIncidentIds.has(incident.id) && (
+                      <span className="text-xs text-amber-400">responder en route</span>
                     )}
                   </div>
                 </li>
@@ -266,8 +305,22 @@ export default function DashboardPage() {
             </ul>
           )}
 
+          <RescueOpsPanel />
+
+          <AlertComposer />
+
+          <ManualIncidentForm />
+
           {token && (
-            <SimulatorPanel token={token} isAdmin={user.role === "admin"} onChanged={() => void refresh()} />
+            <SimulatorPanel
+              token={token}
+              isAdmin={user.role === "admin"}
+              onChanged={() => {
+                void queryClient.invalidateQueries({ queryKey: queryKeys.incidents() });
+                void queryClient.invalidateQueries({ queryKey: queryKeys.riskMap() });
+                void queryClient.invalidateQueries({ queryKey: queryKeys.simulatorState() });
+              }}
+            />
           )}
 
           <div className="mt-auto border-t border-slate-800 px-4 py-4">

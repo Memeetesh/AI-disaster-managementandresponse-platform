@@ -12,8 +12,9 @@ import { usePathname } from "next/navigation";
 
 const mobileNavItems = [
   { href: "/", icon: "Home", label: "Home" },
-  { href: "/family", icon: "Users", label: "Family" },
+  { href: "/reports", icon: "FileText", label: "Reports" },
   { href: "/emergency", icon: "Siren", label: "SOS" },
+  { href: "/family", icon: "Users", label: "Family" },
   { href: "/support", icon: "HeartHandshake", label: "Support" },
 ];
 

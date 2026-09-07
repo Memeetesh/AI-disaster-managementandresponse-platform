@@ -9,7 +9,14 @@ import {
   type MapLayerMouseEvent,
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import type { Incident, RiskMapResponse, RiskZoneProperties, Shelter } from "@/types";
+import type {
+  Incident,
+  RescueOperation,
+  Responder,
+  RiskMapResponse,
+  RiskZoneProperties,
+  Shelter,
+} from "@/types";
 
 // Demo area: Chennai — a recurring urban-flooding case study in India.
 // Matches the seeded risk-zone grid in backend/app/risk/demo_baseline.py.
@@ -61,15 +68,51 @@ function sheltersToGeoJSON(shelters: Shelter[]) {
   };
 }
 
+function respondersToGeoJSON(responders: Responder[]) {
+  return {
+    type: "FeatureCollection" as const,
+    features: responders.map((r) => ({
+      type: "Feature" as const,
+      geometry: { type: "Point" as const, coordinates: [r.longitude, r.latitude] },
+      properties: { id: r.id, name: r.name, status: r.status, vehicle: r.vehicle ?? "" },
+    })),
+  };
+}
+
+const ACTIVE_RESCUE_STATUSES = new Set(["assigned", "en_route", "in_progress"]);
+
+function routesToGeoJSON(rescueOps: RescueOperation[]) {
+  return {
+    type: "FeatureCollection" as const,
+    features: rescueOps
+      .filter((op) => op.route && ACTIVE_RESCUE_STATUSES.has(op.status))
+      .map((op) => ({
+        type: "Feature" as const,
+        geometry: op.route as GeoJSON.LineString,
+        properties: { id: op.id, status: op.status },
+      })),
+  };
+}
+
 interface RiskMapProps {
   className?: string;
   riskMap?: RiskMapResponse;
   incidents?: Incident[];
   shelters?: Shelter[];
+  responders?: Responder[];
+  rescueOps?: RescueOperation[];
   onZoneClick?: (properties: RiskZoneProperties) => void;
 }
 
-export function RiskMap({ className, riskMap, incidents, shelters, onZoneClick }: RiskMapProps) {
+export function RiskMap({
+  className,
+  riskMap,
+  incidents,
+  shelters,
+  responders,
+  rescueOps,
+  onZoneClick,
+}: RiskMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -173,6 +216,84 @@ export function RiskMap({ className, riskMap, incidents, shelters, onZoneClick }
         },
       });
 
+      map.addSource("rescue-routes", { type: "geojson", data: EMPTY_FC });
+      map.addLayer({
+        id: "rescue-routes-line",
+        type: "line",
+        source: "rescue-routes",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": "#f59e0b",
+          "line-width": 3,
+          "line-dasharray": [2, 1.5],
+          "line-opacity": 0.9,
+        },
+      });
+
+      map.addSource("responders", { type: "geojson", data: EMPTY_FC });
+      map.addLayer({
+        id: "responders-points",
+        type: "circle",
+        source: "responders",
+        paint: {
+          "circle-radius": 6,
+          "circle-color": [
+            "match",
+            ["get", "status"],
+            "available",
+            "#22c55e",
+            "en_route",
+            "#f59e0b",
+            "busy",
+            "#ef4444",
+            "offline",
+            "#94a3b8",
+            "#94a3b8",
+          ],
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#0f172a",
+        },
+      });
+
+      const pointPopup = (
+        layer: string,
+        html: (props: Record<string, unknown>) => string
+      ) => {
+        map.on("click", layer, (e: MapLayerMouseEvent) => {
+          const f = e.features?.[0];
+          if (!f) return;
+          new Popup({ closeButton: true })
+            .setLngLat(e.lngLat)
+            .setHTML(
+              `<div style="font:12px system-ui;color:#0f172a;line-height:1.5">${html(
+                f.properties as Record<string, unknown>
+              )}</div>`
+            )
+            .addTo(map);
+        });
+        map.on("mouseenter", layer, () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mouseleave", layer, () => {
+          map.getCanvas().style.cursor = "";
+        });
+      };
+
+      pointPopup(
+        "incidents-points",
+        (p) =>
+          `<strong>Incident #${p.id}</strong><br/>${p.type} · ${p.severity}<br/>status: ${p.status}`
+      );
+      pointPopup(
+        "shelters-points",
+        (p) => `<strong>${p.name}</strong><br/>status: ${p.status}`
+      );
+      pointPopup(
+        "responders-points",
+        (p) =>
+          `<strong>${p.name}</strong><br/>${p.vehicle || "team"} · ${p.status}`
+      );
+
       map.on("click", "risk-zones-fill", (e: MapLayerMouseEvent) => {
         const feature = e.features?.[0];
         if (!feature) return;
@@ -229,6 +350,18 @@ export function RiskMap({ className, riskMap, incidents, shelters, onZoneClick }
     const source = mapRef.current.getSource("shelters") as GeoJSONSource | undefined;
     source?.setData(shelters ? sheltersToGeoJSON(shelters) : EMPTY_FC);
   }, [loaded, shelters]);
+
+  useEffect(() => {
+    if (!loaded || !mapRef.current) return;
+    const source = mapRef.current.getSource("responders") as GeoJSONSource | undefined;
+    source?.setData(responders ? respondersToGeoJSON(responders) : EMPTY_FC);
+  }, [loaded, responders]);
+
+  useEffect(() => {
+    if (!loaded || !mapRef.current) return;
+    const source = mapRef.current.getSource("rescue-routes") as GeoJSONSource | undefined;
+    source?.setData(rescueOps ? routesToGeoJSON(rescueOps) : EMPTY_FC);
+  }, [loaded, rescueOps]);
 
   return <div ref={containerRef} className={className ?? "h-full w-full"} />;
 }

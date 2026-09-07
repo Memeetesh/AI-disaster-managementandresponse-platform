@@ -2,11 +2,11 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Icon } from "@/components/citizen/Icon";
 import { useAuth } from "@/lib/auth-context";
 import { useLocation } from "@/hooks/useLocation";
-import { submitReport } from "@/lib/incidents-api";
-import { ApiError } from "@/lib/api";
+import { useIncident, useSubmitReport } from "@/lib/queries";
 import type { Incident, IncidentType } from "@/types";
 
 const INCIDENT_TYPES: { value: IncidentType; label: string }[] = [
@@ -22,35 +22,40 @@ export default function ReportPage() {
   const { token } = useAuth();
   const router = useRouter();
   const location = useLocation();
+  const submitReport = useSubmitReport();
 
   const [type, setType] = useState<IncidentType>("flood");
   const [peopleAffected, setPeopleAffected] = useState(0);
   const [description, setDescription] = useState("");
   const [image, setImage] = useState<File | null>(null);
   const [audio, setAudio] = useState<File | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<Incident | null>(null);
 
-  async function handleSubmit(e: FormEvent) {
+  // Live status of the just-submitted incident — realtime patches this key
+  // when a responder verifies/rejects it, so the confirmation screen updates
+  // in place without a refresh.
+  const liveIncident = useIncident(result?.id ?? null);
+
+  function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (location.status !== "ok" || !token) return;
-    setError(null);
-    setSubmitting(true);
-    try {
-      const incident = await submitReport(
-        { latitude: location.lat, longitude: location.lon, type, peopleAffected, description: description || undefined, image, audio },
-        token
-      );
-      setResult(incident);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to submit report");
-    } finally {
-      setSubmitting(false);
-    }
+    submitReport.mutate(
+      {
+        latitude: location.lat,
+        longitude: location.lon,
+        type,
+        peopleAffected,
+        description: description || undefined,
+        image,
+        audio,
+      },
+      { onSuccess: (incident) => setResult(incident) }
+    );
   }
 
   if (result) {
+    const status = liveIncident.data?.status ?? result.status;
+    const severity = liveIncident.data?.severity ?? result.severity;
     return (
       <div className="mx-auto max-w-lg py-16 text-center animate-fade-in">
         <div className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-full bg-safe-100 text-safe-600">
@@ -58,12 +63,20 @@ export default function ReportPage() {
         </div>
         <h1 className="text-xl font-bold text-navy-900">Report submitted</h1>
         <p className="mt-2 text-sm text-slate2-600">
-          Incident #{result.id} logged as <span className="font-semibold">{result.severity}</span> severity, status{" "}
-          <span className="font-mono">{result.status}</span>. Thank you for helping keep the map accurate.
+          Incident #{result.id} logged as <span className="font-semibold">{severity}</span> severity, status{" "}
+          <span className="font-mono">{status}</span>.
         </p>
-        <button onClick={() => router.push("/")} className="btn-primary mt-6">
-          Back to home
-        </button>
+        <p className="mt-1 text-xs text-slate2-400">
+          This updates live as a responder reviews it.
+        </p>
+        <div className="mt-6 flex items-center justify-center gap-3">
+          <Link href="/reports" className="btn-primary">
+            View my reports
+          </Link>
+          <button onClick={() => router.push("/")} className="btn-secondary">
+            Back to home
+          </button>
+        </div>
       </div>
     );
   }
@@ -128,11 +141,19 @@ export default function ReportPage() {
           <input type="file" accept="audio/*" onChange={(e) => setAudio(e.target.files?.[0] ?? null)} className="block w-full text-sm text-slate2-600" />
         </div>
 
-        {error && <p className="text-sm text-danger-600">{error}</p>}
+        {submitReport.isError && (
+          <p className="text-sm text-danger-600">
+            {submitReport.error instanceof Error ? submitReport.error.message : "Failed to submit report"}
+          </p>
+        )}
 
-        <button type="submit" disabled={submitting || location.status !== "ok"} className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-50">
+        <button
+          type="submit"
+          disabled={submitReport.isPending || location.status !== "ok"}
+          className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-50"
+        >
           <Icon name="Send" className="w-4 h-4" />
-          {submitting ? "Submitting…" : "Submit report"}
+          {submitReport.isPending ? "Submitting…" : "Submit report"}
         </button>
       </form>
     </div>

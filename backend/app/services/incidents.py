@@ -8,11 +8,19 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.events.broker import broker
 from app.gis.points import make_point
 from app.models.enums import IncidentStatus
 from app.models.incident import Incident
 from app.models.incident_evidence import IncidentEvidence
 from app.models.user import User
+from app.schemas.incident import IncidentOut
+
+
+def _publish_incident(event_type: str, incident: Incident) -> None:
+    """Fan an incident change out over SSE (see app/api/stream.py). Payload
+    is the same IncidentOut shape the REST endpoints return."""
+    broker.publish(event_type, IncidentOut.model_validate(incident).model_dump(mode="json"))
 
 
 def create_incident(
@@ -41,6 +49,9 @@ def create_incident(
     db.add(incident)
     db.commit()
     db.refresh(incident)
+    _publish_incident("incident.created", incident)
+    # A new incident shifts nearby risk-zone scores (see risk_zones.compute_zones).
+    broker.publish("risk.updated", {"reason": "incident"})
     return incident
 
 
@@ -92,6 +103,8 @@ def add_evidence(
     db.add(evidence)
     db.commit()
     db.refresh(evidence)
+    db.refresh(incident)
+    _publish_incident("incident.updated", incident)
     return evidence
 
 
@@ -150,4 +163,7 @@ def update_incident(
         incident.severity = new_severity
     db.commit()
     db.refresh(incident)
+    _publish_incident("incident.updated", incident)
+    # Status/severity changes affect which incidents count toward nearby risk.
+    broker.publish("risk.updated", {"reason": "incident"})
     return incident

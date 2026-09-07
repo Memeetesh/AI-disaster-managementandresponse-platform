@@ -14,6 +14,7 @@ const navItems = [
   { href: "/family", icon: "Users", label: "Family", desc: "Real-time safety status of your family" },
   { href: "/emergency", icon: "Siren", label: "Emergency", desc: "Immediate emergency assistance" },
   { href: "/report", icon: "AlertTriangle", label: "Report Incident", desc: "Report a flood, blocked road, or hazard" },
+  { href: "/reports", icon: "FileText", label: "My Reports", desc: "Track the incidents you've reported" },
   { href: "/support", icon: "HeartHandshake", label: "Support", desc: "Post-disaster assistance and support" },
 ];
 
