@@ -9,7 +9,20 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { createAlert, listAlerts, type CreateAlertInput } from "@/lib/alerts-api";
 import { sendSupportChat, type ChatMessage } from "@/lib/chat-api";
+import { getNearbyPlaces, type PlaceKind } from "@/lib/places-api";
 import { createCheckIn, getMyCheckIn, type CheckInInput } from "@/lib/checkin-api";
+import {
+  addFamilyMember,
+  getLocationSharing,
+  listFamily,
+  listFamilyRequests,
+  removeFamilyMember,
+  respondToFamilyRequest,
+  sendLocationPing,
+  setLocationSharing,
+  type AddFamilyMemberInput,
+  type RealFamilyMember,
+} from "@/lib/family-api";
 import {
   createIncident,
   getIncident,
@@ -63,6 +76,8 @@ export const queryKeys = {
     ["shelters", "nearest", lat ?? null, lon ?? null] as const,
   rainfall: (lat?: number, lon?: number) =>
     ["weather", "rainfall", lat ?? null, lon ?? null] as const,
+  places: (kind: string, lat?: number, lon?: number) =>
+    ["places", kind, lat ?? null, lon ?? null] as const,
   flood: (lat?: number, lon?: number) =>
     ["weather", "flood", lat ?? null, lon ?? null] as const,
   cyclone: (lat?: number, lon?: number) =>
@@ -76,6 +91,9 @@ export const queryKeys = {
   rescueOps: () => ["rescue-ops"] as const,
   dashboardStats: () => ["dashboard-stats"] as const,
   myCheckIn: () => ["check-in", "me"] as const,
+  family: () => ["family"] as const,
+  familyRequests: () => ["family-requests"] as const,
+  locationSharing: () => ["location-sharing"] as const,
 };
 
 /** Every realtime-backed key, invalidated once on each (re)connect. */
@@ -91,6 +109,8 @@ export function invalidateRealtimeQueries(qc: QueryClient): void {
     queryKeys.rescueOps(),
     queryKeys.dashboardStats(),
     queryKeys.myCheckIn(),
+    queryKeys.family(),
+    queryKeys.familyRequests(),
   ]) {
     void qc.invalidateQueries({ queryKey: key });
   }
@@ -154,6 +174,63 @@ export function useMyCheckIn() {
     queryKey: queryKeys.myCheckIn(),
     queryFn: () => getMyCheckIn(token as string),
     enabled: !!token,
+  });
+}
+
+/** The citizen's family safety circle with each member's live status.
+ * Pass the caller's coords to get `distance_km` to members sharing location.
+ * Realtime invalidates this on `family.updated`; also polls every 60s as a
+ * backstop (a member's "safe" check-in can go stale after 24h). */
+export function useFamily(origin?: { lat: number; lon: number } | null) {
+  const { token } = useAuth();
+  return useQuery({
+    queryKey: queryKeys.family(),
+    queryFn: () => listFamily(token as string, origin ?? null),
+    enabled: !!token,
+    refetchInterval: 60 * 1000,
+  });
+}
+
+/** People who added the caller to their circle, awaiting accept/decline. */
+export function useFamilyRequests() {
+  const { token } = useAuth();
+  return useQuery({
+    queryKey: queryKeys.familyRequests(),
+    queryFn: () => listFamilyRequests(token as string),
+    enabled: !!token,
+    refetchInterval: 60 * 1000,
+  });
+}
+
+/** The caller's own location-sharing state (opt-in, off by default). */
+export function useLocationSharing() {
+  const { token } = useAuth();
+  return useQuery({
+    queryKey: queryKeys.locationSharing(),
+    queryFn: () => getLocationSharing(token as string),
+    enabled: !!token,
+  });
+}
+
+/** Real nearby places (hospitals, shelters, …) from OpenStreetMap via the
+ * backend. Cached an hour server-side; pass `enabled: false` to hold off. */
+export function useNearbyPlaces(
+  lat: number | null,
+  lon: number | null,
+  kind: PlaceKind,
+  opts?: { radiusKm?: number; limit?: number; enabled?: boolean }
+) {
+  const { token } = useAuth();
+  return useQuery({
+    queryKey: queryKeys.places(kind, lat ?? undefined, lon ?? undefined),
+    queryFn: () =>
+      getNearbyPlaces(lat as number, lon as number, kind, token as string, {
+        radiusKm: opts?.radiusKm,
+        limit: opts?.limit,
+      }),
+    enabled:
+      (opts?.enabled ?? true) && !!token && lat !== null && lon !== null,
+    staleTime: 30 * 60 * 1000,
   });
 }
 
@@ -314,6 +391,82 @@ export function useCheckIn() {
     onSuccess: (checkIn: CheckIn) => {
       qc.setQueryData(queryKeys.myCheckIn(), checkIn);
       void qc.invalidateQueries({ queryKey: queryKeys.myCheckIn() });
+    },
+  });
+}
+
+/** Add a person to the citizen's family safety circle. */
+export function useAddFamilyMember() {
+  const { token } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AddFamilyMemberInput) => addFamilyMember(input, token as string),
+    onSuccess: (member: RealFamilyMember) => {
+      qc.setQueryData(
+        queryKeys.family(),
+        (prev: RealFamilyMember[] | undefined) => [...(prev ?? []), member]
+      );
+      void qc.invalidateQueries({ queryKey: queryKeys.family() });
+    },
+  });
+}
+
+/** Remove a person from the citizen's family safety circle. */
+export function useRemoveFamilyMember() {
+  const { token } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => removeFamilyMember(id, token as string),
+    onSuccess: (_void, id: number) => {
+      qc.setQueryData(
+        queryKeys.family(),
+        (prev: RealFamilyMember[] | undefined) => prev?.filter((m) => m.id !== id) ?? prev
+      );
+      void qc.invalidateQueries({ queryKey: queryKeys.family() });
+    },
+  });
+}
+
+/** Accept or decline a "someone added you to their circle" request. */
+export function useRespondToFamilyRequest() {
+  const { token } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: number; accept: boolean }) =>
+      respondToFamilyRequest(vars.id, vars.accept, token as string),
+    onSuccess: (_void, vars) => {
+      qc.setQueryData(
+        queryKeys.familyRequests(),
+        (prev: { id: number }[] | undefined) => prev?.filter((r) => r.id !== vars.id) ?? prev
+      );
+      void qc.invalidateQueries({ queryKey: queryKeys.familyRequests() });
+      void qc.invalidateQueries({ queryKey: queryKeys.family() });
+    },
+  });
+}
+
+/** Turn the caller's own location sharing on or off. */
+export function useSetLocationSharing() {
+  const { token } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) => setLocationSharing(enabled, token as string),
+    onSuccess: (state) => {
+      qc.setQueryData(queryKeys.locationSharing(), state);
+      void qc.invalidateQueries({ queryKey: queryKeys.family() });
+    },
+  });
+}
+
+/** Push one location ping (only accepted while sharing is on). */
+export function useSendLocationPing() {
+  const { token } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (coords: { latitude: number; longitude: number }) =>
+      sendLocationPing(coords, token as string),
+    onSuccess: (state) => {
+      qc.setQueryData(queryKeys.locationSharing(), state);
     },
   });
 }

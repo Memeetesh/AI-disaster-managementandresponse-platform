@@ -92,6 +92,12 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
             queryKey: queryKeys.simulatorState(),
           });
           break;
+        case "family.updated":
+          void queryClient.invalidateQueries({ queryKey: queryKeys.family() });
+          void queryClient.invalidateQueries({
+            queryKey: queryKeys.familyRequests(),
+          });
+          break;
       }
     }
 

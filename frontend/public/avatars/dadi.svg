@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Dadi avatar">
+  <rect width="128" height="128" fill="#c24a45"/>
+  <circle cx="64" cy="132" r="46" fill="#d47470"/>
+  <circle cx="64" cy="34" r="12" fill="#c9cbd4"/>
+  <path d="M38 60c0-20 11-30 26-30s26 10 26 30c0 5-1 13-3 19l-6-4c1-5 2-10 2-15 0-14-7-21-19-21s-19 7-19 21c0 5 1 10 2 15l-6 4c-2-6-3-14-3-19z" fill="#c9cbd4"/>
+  <circle cx="64" cy="60" r="20" fill="#e3ae88"/>
+  <path d="M46 58h14M68 58h14" stroke="#5b5f6b" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+  <circle cx="54" cy="60" r="6.5" fill="none" stroke="#5b5f6b" stroke-width="2.4"/>
+  <circle cx="74" cy="60" r="6.5" fill="none" stroke="#5b5f6b" stroke-width="2.4"/>
+  <path d="M60 60h8" stroke="#5b5f6b" stroke-width="2.4"/>
+  <path d="M57 72q7 5 14 0" stroke="#b07d5c" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+  <path d="M44 98c5-10 12-15 20-15s15 5 20 15l4 20H40z" fill="#f3ecec"/>
+</svg>

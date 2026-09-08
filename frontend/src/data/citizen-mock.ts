@@ -61,6 +61,7 @@ export const familyMembers: FamilyMember[] = [
     contact: "+91 98765 43210",
     avatarColor: "bg-navy-600",
     initials: "A",
+    photoUrl: "/avatars/asha.svg",
   },
   {
     id: "2",
@@ -73,6 +74,7 @@ export const familyMembers: FamilyMember[] = [
     contact: "+91 98765 43211",
     avatarColor: "bg-safe-600",
     initials: "R",
+    photoUrl: "/avatars/rajesh.svg",
   },
   {
     id: "3",
@@ -85,6 +87,7 @@ export const familyMembers: FamilyMember[] = [
     contact: "+91 98765 43212",
     avatarColor: "bg-warn-500",
     initials: "Aa",
+    photoUrl: "/avatars/aarav.svg",
   },
   {
     id: "4",
@@ -97,6 +100,7 @@ export const familyMembers: FamilyMember[] = [
     contact: "+91 98765 43213",
     avatarColor: "bg-support-500",
     initials: "M",
+    photoUrl: "/avatars/meera.svg",
   },
   {
     id: "5",
@@ -109,6 +113,7 @@ export const familyMembers: FamilyMember[] = [
     contact: "+91 98765 43214",
     avatarColor: "bg-danger-500",
     initials: "D",
+    photoUrl: "/avatars/dadi.svg",
   },
 ];
 

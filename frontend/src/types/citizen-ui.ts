@@ -26,6 +26,8 @@ export interface FamilyMember {
   contact: string;
   avatarColor: string;
   initials: string;
+  /** Dummy profile picture served from /public/avatars (demo data only). */
+  photoUrl: string;
 }
 
 export interface AuthorityMessage {

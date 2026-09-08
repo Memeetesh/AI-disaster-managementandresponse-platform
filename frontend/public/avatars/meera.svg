@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Meera avatar">
+  <rect width="128" height="128" fill="#7c6b9c"/>
+  <circle cx="64" cy="133" r="45" fill="#9585b4"/>
+  <circle cx="38" cy="46" r="9" fill="#33261f"/>
+  <circle cx="90" cy="46" r="9" fill="#33261f"/>
+  <path d="M36 62c0-20 11-32 28-32s28 12 28 32c0 7-2 18-4 24l-7-5c2-6 3-13 3-19 0-15-8-22-20-22s-20 7-20 22c0 6 1 13 3 19l-7 5c-2-6-4-17-4-24z" fill="#33261f"/>
+  <circle cx="64" cy="60" r="20" fill="#e8b48c"/>
+  <circle cx="56" cy="59" r="2" fill="#3a2b22"/>
+  <circle cx="72" cy="59" r="2" fill="#3a2b22"/>
+  <path d="M59 70q5 4 10 0" stroke="#b9825f" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+  <path d="M46 98c4-9 10-14 18-14s14 5 18 14l3 18H43z" fill="#efeaf6"/>
+  <circle cx="64" cy="103" r="3" fill="#d9cfe8"/>
+</svg>

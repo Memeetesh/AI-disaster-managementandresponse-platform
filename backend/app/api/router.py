@@ -15,8 +15,10 @@ from app.api import (
     chat,
     check_in,
     dashboard,
+    family,
     health,
     incidents,
+    places,
     reports,
     rescue_operations,
     responders,
@@ -42,7 +44,9 @@ api_router.include_router(shelters.router)
 api_router.include_router(simulator.router)
 api_router.include_router(alerts.router)
 api_router.include_router(check_in.router)
+api_router.include_router(family.router)
 api_router.include_router(weather.router)
+api_router.include_router(places.router)
 api_router.include_router(chat.router)
 api_router.include_router(responders.router)
 api_router.include_router(rescue_operations.router)

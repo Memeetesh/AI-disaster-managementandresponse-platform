@@ -2,6 +2,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.events.broker import broker
 from app.gis.points import make_point
 from app.models.check_in import CheckIn
 
@@ -29,6 +30,9 @@ def create_check_in(
     db.add(check_in)
     db.commit()
     db.refresh(check_in)
+    # Nudge every citizen's app to refetch their family circle — the payload
+    # carries no identifying info (see app/api/stream.py::_visible_to).
+    broker.publish("family.updated", {"reason": "check_in"})
     return check_in
 
 

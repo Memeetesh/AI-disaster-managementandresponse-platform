@@ -7,12 +7,12 @@ import { emergencyQuickActions } from "@/data/citizen-mock";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast-context";
 import { useLocation } from "@/hooks/useLocation";
-import { useCheckIn, useMyCheckIn, useNearestShelters } from "@/lib/queries";
+import { useCheckIn, useMyCheckIn, useNearbyPlaces, useNearestShelters } from "@/lib/queries";
 import { alertRelativeTime } from "@/lib/alerts";
-import type { NearbyShelter } from "@/types";
+import { downloadOfflineMap, type OfflineMapPlace } from "@/lib/offline-map";
 
-function openOnMap(shelter: NearbyShelter): void {
-  const { latitude: lat, longitude: lon } = shelter;
+function openOnMap(place: { latitude: number; longitude: number }): void {
+  const { latitude: lat, longitude: lon } = place;
   window.open(
     `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`,
     "_blank",
@@ -28,17 +28,40 @@ export default function EmergencyPage() {
 
   const lat = location.status === "ok" ? location.lat : null;
   const lon = location.status === "ok" ? location.lon : null;
-  const { data: nearby = [] } = useNearestShelters(lat, lon, 5);
+  const { data: appShelters = [] } = useNearestShelters(lat, lon, 5);
+  const { data: hospitals = [], isLoading: hospitalsLoading } = useNearbyPlaces(lat, lon, "hospital", {
+    radiusKm: 12,
+    limit: 5,
+  });
+  const appSheltersNear = appShelters.filter((s) => s.distance_km <= 25);
+  const { data: osmShelters = [] } = useNearbyPlaces(lat, lon, "shelter", {
+    radiusKm: 15,
+    limit: 5,
+    enabled: appSheltersNear.length < 3,
+  });
   const checkIn = useCheckIn();
+  const [buildingMap, setBuildingMap] = useState(false);
   const { data: myCheckIn } = useMyCheckIn();
 
-  const nearestRescue = nearby[0] ?? null;
-  const nearestHospital = nearby.find((s) => s.facilities?.includes("medical")) ?? nearby[0] ?? null;
+  // "Rescue center" = an app-registered relief shelter (has live capacity).
+  // "Hospital" = a real hospital from OpenStreetMap.
+  const nearestRescue = appShelters[0] ?? null;
+  const nearestHospital = hospitals[0] ?? null;
   const isSafe = myCheckIn?.status === "safe";
 
   function actionDetail(id: string): string {
-    if (id === "hospital") return nearestHospital ? `${nearestHospital.name} · ${nearestHospital.distance_km.toFixed(1)} km` : "Locating…";
-    if (id === "rescue") return nearestRescue ? `${nearestRescue.name} · ${nearestRescue.distance_km.toFixed(1)} km` : "Locating…";
+    if (id === "hospital") {
+      if (nearestHospital) return `${nearestHospital.name} · ${nearestHospital.distance_km.toFixed(1)} km`;
+      return hospitalsLoading ? "Finding nearest hospital…" : "None found nearby";
+    }
+    if (id === "rescue") {
+      return nearestRescue
+        ? `${nearestRescue.name} · ${nearestRescue.distance_km.toFixed(1)} km`
+        : "No registered shelter nearby";
+    }
+    if (id === "offline-map") {
+      return buildingMap ? "Building…" : "Download for offline use";
+    }
     return emergencyQuickActions.find((a) => a.id === id)?.detail ?? "";
   }
 
@@ -47,19 +70,79 @@ export default function EmergencyPage() {
       window.location.assign("tel:112");
       return;
     }
-    if (id === "hospital" && nearestHospital) {
-      openOnMap(nearestHospital);
+    if (id === "hospital") {
+      if (nearestHospital?.phone) {
+        window.location.assign(`tel:${nearestHospital.phone.replace(/[^\d+]/g, "")}`);
+      } else if (nearestHospital) {
+        openOnMap(nearestHospital);
+      } else {
+        addToast(
+          location.status === "ok" ? "No hospital found within 12 km." : "Waiting for your location.",
+          "info"
+        );
+      }
       return;
     }
-    if (id === "rescue" && nearestRescue) {
-      openOnMap(nearestRescue);
+    if (id === "rescue") {
+      if (nearestRescue) openOnMap(nearestRescue);
+      else addToast("No registered relief shelter near you yet.", "info");
       return;
     }
-    if (id === "hospital" || id === "rescue") {
-      addToast("Waiting for your location to find the nearest facility.", "info");
+    if (id === "offline-map") {
+      handleOfflineMap();
       return;
     }
-    addToast("Offline maps aren't wired up yet — this is a demo action.", "info");
+    addToast("This action isn't available yet.", "info");
+  }
+
+  function handleOfflineMap(): void {
+    if (location.status !== "ok" || lat === null || lon === null) {
+      addToast("I need your location to build an offline map.", "info");
+      return;
+    }
+    const shelterSource: OfflineMapPlace[] =
+      appSheltersNear.length > 0
+        ? appSheltersNear.map((s) => ({
+            name: s.name,
+            latitude: s.latitude,
+            longitude: s.longitude,
+            distance_km: s.distance_km,
+            detail: `${s.occupied}/${s.capacity} · ${s.status}`,
+            address: s.accessibility,
+          }))
+        : osmShelters.map((p) => ({
+            name: p.name,
+            latitude: p.latitude,
+            longitude: p.longitude,
+            distance_km: p.distance_km,
+            phone: p.phone,
+            address: p.address,
+          }));
+    const hospital: OfflineMapPlace | null = nearestHospital
+      ? {
+          name: nearestHospital.name,
+          latitude: nearestHospital.latitude,
+          longitude: nearestHospital.longitude,
+          distance_km: nearestHospital.distance_km,
+          phone: nearestHospital.phone,
+          address: nearestHospital.address,
+        }
+      : null;
+
+    setBuildingMap(true);
+    addToast("Preparing your offline map…", "info");
+    downloadOfflineMap({
+      lat,
+      lon,
+      accuracyM: location.status === "ok" ? location.accuracy : null,
+      shelters: shelterSource,
+      hospital,
+    })
+      .then(() =>
+        addToast("Saved. Open drishti-offline-map.html anytime — no internet needed.", "success")
+      )
+      .catch(() => addToast("Could not build the offline map. Try again with a connection.", "error"))
+      .finally(() => setBuildingMap(false));
   }
 
   function handleSafe(): void {

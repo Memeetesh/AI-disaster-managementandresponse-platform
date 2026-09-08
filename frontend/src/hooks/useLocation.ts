@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 export type LocationState =
   | { status: "loading" }
   | { status: "error"; error: string }
-  | { status: "ok"; lat: number; lon: number };
+  | { status: "ok"; lat: number; lon: number; accuracy: number };
 
 export function useLocation() {
   const [state, setState] = useState<LocationState>(() =>
@@ -18,9 +18,14 @@ export function useLocation() {
     if (typeof navigator === "undefined" || !("geolocation" in navigator)) return;
     navigator.geolocation.getCurrentPosition(
       (pos) =>
-        setState({ status: "ok", lat: pos.coords.latitude, lon: pos.coords.longitude }),
+        setState({
+          status: "ok",
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+        }),
       (err) => setState({ status: "error", error: err.message }),
-      { enableHighAccuracy: true, timeout: 10_000 }
+      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 }
     );
   }, []);
 

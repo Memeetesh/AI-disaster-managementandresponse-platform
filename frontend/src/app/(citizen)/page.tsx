@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Icon, getRiskColor, getRiskLabel, getRiskDot } from "@/components/citizen/Icon";
 import { LineChart } from "@/components/citizen/Charts";
-import { riskCards as mockRiskCards, riverLevelData, riverCourseData } from "@/data/citizen-mock";
+import { riskCards as mockRiskCards } from "@/data/citizen-mock";
 import { useAuth } from "@/lib/auth-context";
 import { useLocation } from "@/hooks/useLocation";
 import {
@@ -11,6 +11,7 @@ import {
   useCycloneForecast,
   useFloodForecast,
   useLandslideForecast,
+  useNearbyPlaces,
   useNearestShelters,
   useRainfallForecast,
   useRiskMap,
@@ -65,14 +66,23 @@ export default function HomePage() {
 
   const riskMapQuery = useRiskMap();
   const alertsQuery = useAlerts();
-  const nearbyQuery = useNearestShelters(lat, lon, 3);
+  const sheltersQuery = useNearestShelters(lat, lon, 3);
   const rainfallQuery = useRainfallForecast(lat, lon);
   const floodQuery = useFloodForecast(lat, lon);
   const cycloneQuery = useCycloneForecast(lat, lon);
   const landslideQuery = useLandslideForecast(lat, lon);
   const riskMap: RiskMapResponse | null = riskMapQuery.data ?? null;
   const activeAlert = topAlert(alertsQuery.data ?? []);
-  const nearestShelters = nearbyQuery.data ?? [];
+  const appShelters = sheltersQuery.data ?? [];
+  const appSheltersNear = appShelters.filter((s) => s.distance_km <= 25);
+  // Only reach out to OpenStreetMap when there aren't enough registered
+  // relief shelters near the user.
+  const osmSheltersQuery = useNearbyPlaces(lat, lon, "shelter", {
+    radiusKm: 15,
+    limit: 4,
+    enabled: appSheltersNear.length < 3,
+  });
+  const osmShelters = osmSheltersQuery.data ?? [];
   const rainfall = rainfallQuery.data ?? null;
   const flood = floodQuery.data ?? null;
   const cyclone = cycloneQuery.data ?? null;
@@ -290,27 +300,55 @@ export default function HomePage() {
           </div>
           <h2 className="text-lg font-bold text-navy-900">Nearby Shelters</h2>
         </div>
-        {nearestShelters.length === 0 ? (
+        {appSheltersNear.length === 0 && osmShelters.length === 0 ? (
           <div className="card p-6 text-sm text-slate2-500">
             {location.status !== "ok"
               ? "Waiting for your location…"
-              : nearbyQuery.isLoading
+              : sheltersQuery.isLoading || osmSheltersQuery.isLoading
                 ? "Finding shelters near you…"
-                : "No shelters found nearby."}
+                : "No shelters found near your location."}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {nearestShelters.map((s) => (
-              <div key={s.id} className="card p-5">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-bold text-navy-900">{s.name}</p>
-                  <span className="text-xs font-mono text-slate2-500">{s.distance_km.toFixed(1)} km</span>
-                </div>
-                <p className="text-xs text-slate2-500">
-                  {s.occupied}/{s.capacity} occupied · {s.accessibility ?? "accessibility unknown"} · {s.status}
-                </p>
+          <div className="space-y-4">
+            {appSheltersNear.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {appSheltersNear.map((s) => (
+                  <div key={s.id} className="card p-5">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm font-bold text-navy-900">{s.name}</p>
+                      <span className="text-xs font-mono text-slate2-500">{s.distance_km.toFixed(1)} km</span>
+                    </div>
+                    <p className="text-xs text-slate2-500">
+                      {s.occupied}/{s.capacity} occupied · {s.accessibility ?? "accessibility unknown"} · {s.status}
+                    </p>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
+            {osmShelters.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-slate2-400 uppercase mb-2">
+                  Other nearby shelters · OpenStreetMap
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {osmShelters.map((p, i) => (
+                    <a
+                      key={`${p.name}-${i}`}
+                      href={`https://www.openstreetmap.org/?mlat=${p.latitude}&mlon=${p.longitude}#map=17/${p.latitude}/${p.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="card card-hover p-5 block"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-sm font-bold text-navy-900">{p.name}</p>
+                        <span className="text-xs font-mono text-slate2-500">{p.distance_km.toFixed(1)} km</span>
+                      </div>
+                      <p className="text-xs text-slate2-500">{p.address ?? "Tap to open in maps"}</p>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </section>
@@ -320,79 +358,79 @@ export default function HomePage() {
           <div className="w-8 h-8 rounded-lg bg-navy-100 flex items-center justify-center">
             <Icon name="Waves" className="w-4 h-4 text-navy-600" />
           </div>
-          <h2 className="text-lg font-bold text-navy-900">River Monitoring</h2>
-          <span className="text-[10px] font-semibold text-slate2-400 uppercase">Sample data</span>
+          <h2 className="text-lg font-bold text-navy-900">River Discharge</h2>
+          <span className="text-[10px] font-semibold text-slate2-400 uppercase">GloFAS forecast</span>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="card p-5">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-navy-50 flex items-center justify-center">
-                  <Icon name="Waves" className="w-6 h-6 text-navy-600" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-navy-900">River Level</h3>
-                  <p className="text-xs text-slate2-500">{riverLevelData.name}</p>
-                </div>
-              </div>
-              <span className="badge bg-warn-100 text-warn-700">
-                <span className="w-1.5 h-1.5 rounded-full bg-warn-500 animate-pulse" />
-                Above Normal
-              </span>
-            </div>
-            <div className="flex items-end justify-between mb-4">
-              <div>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-bold gradient-text">{riverLevelData.current}</span>
-                  <span className="text-lg text-slate2-400">{riverLevelData.unit}</span>
-                </div>
-                <p className="text-xs text-warn-600 font-medium mt-0.5">Above normal ({riverLevelData.normal}{riverLevelData.unit})</p>
-              </div>
-              <div className="text-right space-y-1">
-                <div className="flex items-center gap-1.5 text-xs">
-                  <span className="w-2 h-2 rounded-full bg-slate2-300" />
-                  <span className="text-slate2-500">Normal: {riverLevelData.normal}{riverLevelData.unit}</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-xs">
-                  <span className="w-2 h-2 rounded-full bg-danger-500" />
-                  <span className="text-danger-600 font-medium">Critical: {riverLevelData.critical}{riverLevelData.unit}</span>
-                </div>
-              </div>
-            </div>
-            <LineChart data={riverLevelData.history} color="#5a7bb8" height={70} showArea showDots />
+        {location.status !== "ok" ? (
+          <div className="card p-6 text-sm text-slate2-500">Waiting for your location…</div>
+        ) : !flood ? (
+          <div className="card p-6 text-sm text-slate2-500">Loading river data…</div>
+        ) : flood.anomaly_ratio === null ? (
+          <div className="card p-6 text-sm text-slate2-500">
+            No major river modelled near your location, so there is no discharge signal to show here.
           </div>
-
-          <div className="card p-5">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-navy-50 flex items-center justify-center">
-                  <Icon name="MapPinned" className="w-6 h-6 text-navy-600" />
+        ) : (
+          (() => {
+            const rc = getRiskColor(flood.level);
+            const label =
+              flood.level === "low"
+                ? "Near normal"
+                : flood.level === "moderate"
+                  ? "Above normal"
+                  : flood.level === "high"
+                    ? "High flow"
+                    : "Very high flow";
+            return (
+              <div className="card p-5">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-navy-50 flex items-center justify-center">
+                      <Icon name="Waves" className="w-6 h-6 text-navy-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold text-navy-900">Nearest river reach</h3>
+                      <p className="text-xs text-slate2-500">Copernicus GloFAS river-discharge model</p>
+                    </div>
+                  </div>
+                  <span className={`badge ${rc.badge}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${getRiskDot(flood.level)}`} />
+                    {label}
+                  </span>
                 </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-navy-900">River Course Change</h3>
-                  <p className="text-xs text-slate2-500">{riverLevelData.name}</p>
+                <div className="flex items-end justify-between mb-4">
+                  <div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-4xl font-bold gradient-text">
+                        {Math.round(flood.current_discharge_m3s).toLocaleString()}
+                      </span>
+                      <span className="text-lg text-slate2-400">m³/s</span>
+                    </div>
+                    <p className="text-xs text-slate2-500 mt-0.5">current flow</p>
+                  </div>
+                  <div className="text-right space-y-1 text-xs">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-slate2-300" />
+                      <span className="text-slate2-500">
+                        Normal: {Math.round(flood.baseline_discharge_m3s).toLocaleString()} m³/s
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-danger-500" />
+                      <span className="text-danger-600 font-medium">
+                        Forecast peak: {Math.round(flood.forecast_peak_m3s).toLocaleString()} m³/s (
+                        {flood.anomaly_ratio}× normal)
+                      </span>
+                    </div>
+                  </div>
                 </div>
+                <LineChart data={flood.trend} color="#5a7bb8" height={70} showArea showDots />
+                <p className="mt-3 text-xs font-medium text-slate2-600 italic">
+                  &ldquo;{flood.recommendation}&rdquo;
+                </p>
               </div>
-              <span className="badge bg-safe-100 text-safe-700">
-                <span className="w-1.5 h-1.5 rounded-full bg-safe-500" />
-                {riverCourseData.detail}
-              </span>
-            </div>
-            <div className="relative h-36 rounded-xl bg-gradient-to-br from-navy-50 to-slate2-50 map-grid overflow-hidden mb-4 border border-slate2-100">
-              <svg viewBox="0 0 200 100" className="w-full h-full">
-                <path d="M 20 15 Q 60 30 100 50 Q 140 70 180 85" stroke="#5a7bb8" strokeWidth="3" fill="none" strokeLinecap="round" opacity="0.6" />
-                <circle cx="60" cy="30" r="3" fill="#22c55e" />
-                <circle cx="140" cy="70" r="3" fill="#22c55e" />
-                <circle cx="100" cy="50" r="3" fill="#22c55e" />
-              </svg>
-              <div className="absolute bottom-2 right-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg glass border border-slate2-100">
-                <Icon name="CheckCircle2" className="w-3.5 h-3.5 text-safe-500" />
-                <span className="text-[11px] font-medium text-navy-700">No change detected</span>
-              </div>
-            </div>
-            <p className="text-sm text-slate2-600">{riverCourseData.label}</p>
-          </div>
-        </div>
+            );
+          })()
+        )}
       </section>
     </div>
   );

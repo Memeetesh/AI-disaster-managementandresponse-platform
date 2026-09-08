@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Asha avatar">
+  <rect width="128" height="128" fill="#3b4e7a"/>
+  <circle cx="64" cy="132" r="46" fill="#5b6f9e"/>
+  <path d="M34 60c0-22 12-34 30-34s30 12 30 34c0 6-2 22-4 30l-8-6c2-8 3-16 3-22 0-16-8-24-21-24S43 46 43 62c0 6 1 14 3 22l-8 6c-2-8-4-24-4-30z" fill="#241f2b"/>
+  <circle cx="64" cy="58" r="21" fill="#e8b48c"/>
+  <path d="M64 30c14 0 22 9 22 24 0 4-.4 9-1 13-3-10-9-16-21-16s-18 6-21 16c-.6-4-1-9-1-13 0-15 8-24 22-24z" fill="#2a2530"/>
+  <circle cx="64" cy="44" r="2.4" fill="#c0392b"/>
+  <circle cx="55" cy="58" r="2" fill="#3a2b22"/>
+  <circle cx="73" cy="58" r="2" fill="#3a2b22"/>
+  <path d="M58 68q6 5 12 0" stroke="#b9825f" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+  <path d="M40 96c5-10 13-15 24-15s19 5 24 15l4 20H36z" fill="#e7e9f2"/>
+</svg>

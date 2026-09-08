@@ -61,7 +61,7 @@ def _visible_to(event: dict, user_id: int, role: str) -> bool:
         return True
     etype: str = event.get("type", "")
     data = event.get("data") or {}
-    if etype in ("risk.updated", "shelter.updated") or etype.startswith("alert."):
+    if etype in ("risk.updated", "shelter.updated", "family.updated") or etype.startswith("alert."):
         return True
     if etype.startswith("incident.") or etype.startswith("rescue."):
         return isinstance(data, dict) and data.get("reported_by") == user_id

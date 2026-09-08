@@ -30,8 +30,15 @@ export function FamilyMemberModal({ member, onClose, onCheckIn }: FamilyMemberMo
             </button>
           </div>
           <div className="flex items-center gap-4">
-            <div className={`w-16 h-16 rounded-2xl ${member.avatarColor} flex items-center justify-center text-white text-xl font-bold shadow-lg ring-2 ring-white/20`}>
+            <div className={`relative w-16 h-16 overflow-hidden rounded-2xl ${member.avatarColor} flex items-center justify-center text-white text-xl font-bold shadow-lg ring-2 ring-white/20`}>
               {member.initials}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={member.photoUrl}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
+                onError={(e) => e.currentTarget.remove()}
+              />
             </div>
             <div>
               <h2 className="text-xl font-bold">{member.name}</h2>

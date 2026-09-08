@@ -52,6 +52,9 @@ def create_incident(
     _publish_incident("incident.created", incident)
     # A new incident shifts nearby risk-zone scores (see risk_zones.compute_zones).
     broker.publish("risk.updated", {"reason": "incident"})
+    # The reporter's status in someone's family circle may have just changed.
+    if reported_by is not None:
+        broker.publish("family.updated", {"reason": "incident"})
     return incident
 
 
@@ -166,4 +169,7 @@ def update_incident(
     _publish_incident("incident.updated", incident)
     # Status/severity changes affect which incidents count toward nearby risk.
     broker.publish("risk.updated", {"reason": "incident"})
+    # Resolving/escalating an incident can flip the reporter's family status.
+    if incident.reported_by is not None:
+        broker.publish("family.updated", {"reason": "incident"})
     return incident
