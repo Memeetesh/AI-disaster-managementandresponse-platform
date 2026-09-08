@@ -18,7 +18,11 @@ logger = logging.getLogger("drishti.weather")
 _OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 _OPEN_METEO_FLOOD_URL = "https://flood-api.open-meteo.com/v1/flood"
 _OPEN_METEO_ELEVATION_URL = "https://api.open-meteo.com/v1/elevation"
-_TIMEOUT_S = 4.0
+# Generous on purpose: on a free-tier host the outbound TLS handshake to
+# Open-Meteo (a different host from ours, sometimes a cold connection pool)
+# regularly needs >4s. Too tight here means the route 502s and the card
+# silently falls back to demo data.
+_TIMEOUT_S = 12.0
 _CACHE_TTL_S = 900  # 15 minutes
 _cache: dict[tuple[float, float], tuple[float, dict]] = {}
 _flood_cache: dict[tuple[float, float], tuple[float, dict]] = {}

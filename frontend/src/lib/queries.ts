@@ -242,9 +242,11 @@ export function useRainfallForecast(lat: number | null, lon: number | null) {
     queryKey: queryKeys.rainfall(lat ?? undefined, lon ?? undefined),
     queryFn: () => getRainfallForecast(lat as number, lon as number, token as string),
     enabled: !!token && lat !== null && lon !== null,
-    staleTime: 10 * 60 * 1000,
+    staleTime: 5 * 60 * 1000,
     refetchInterval: 15 * 60 * 1000,
-    retry: 1,
+    refetchOnWindowFocus: true,
+    retry: 3,
+    retryDelay: (n) => Math.min(1500 * 2 ** n, 8000),
   });
 }
 
@@ -255,9 +257,11 @@ export function useFloodForecast(lat: number | null, lon: number | null) {
     queryKey: queryKeys.flood(lat ?? undefined, lon ?? undefined),
     queryFn: () => getFloodForecast(lat as number, lon as number, token as string),
     enabled: !!token && lat !== null && lon !== null,
-    staleTime: 10 * 60 * 1000,
+    staleTime: 5 * 60 * 1000,
     refetchInterval: 15 * 60 * 1000,
-    retry: 1,
+    refetchOnWindowFocus: true,
+    retry: 3,
+    retryDelay: (n) => Math.min(1500 * 2 ** n, 8000),
   });
 }
 
@@ -268,9 +272,11 @@ export function useCycloneForecast(lat: number | null, lon: number | null) {
     queryKey: queryKeys.cyclone(lat ?? undefined, lon ?? undefined),
     queryFn: () => getCycloneForecast(lat as number, lon as number, token as string),
     enabled: !!token && lat !== null && lon !== null,
-    staleTime: 10 * 60 * 1000,
+    staleTime: 5 * 60 * 1000,
     refetchInterval: 15 * 60 * 1000,
-    retry: 1,
+    refetchOnWindowFocus: true,
+    retry: 3,
+    retryDelay: (n) => Math.min(1500 * 2 ** n, 8000),
   });
 }
 
@@ -281,9 +287,11 @@ export function useLandslideForecast(lat: number | null, lon: number | null) {
     queryKey: queryKeys.landslide(lat ?? undefined, lon ?? undefined),
     queryFn: () => getLandslideForecast(lat as number, lon as number, token as string),
     enabled: !!token && lat !== null && lon !== null,
-    staleTime: 10 * 60 * 1000,
+    staleTime: 5 * 60 * 1000,
     refetchInterval: 15 * 60 * 1000,
-    retry: 1,
+    refetchOnWindowFocus: true,
+    retry: 3,
+    retryDelay: (n) => Math.min(1500 * 2 ** n, 8000),
   });
 }
 

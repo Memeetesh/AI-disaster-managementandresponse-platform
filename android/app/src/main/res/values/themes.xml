@@ -1,0 +1,9 @@
+<resources>
+    <!-- Compose paints everything; this XML theme only needs no action bar
+         and a sensible window background before the first frame. -->
+    <style name="Theme.DrishtiCitizen" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+        <item name="android:statusBarColor">@color/navy_900</item>
+        <item name="android:navigationBarColor">@color/window_background</item>
+    </style>
+</resources>
