@@ -4,7 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import com.drishti.citizen.core.ui.theme.DrishtiTheme
-import com.drishti.citizen.feature.navigation.AppRoot
+import com.drishti.citizen.feature.root.DrishtiRoot
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -13,7 +13,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             DrishtiTheme {
-                AppRoot()
+                DrishtiRoot()
             }
         }
     }

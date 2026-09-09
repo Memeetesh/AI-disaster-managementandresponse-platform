@@ -46,7 +46,7 @@ interface Note {
 }
 
 export function Header({ onMenuClick }: { onMenuClick: () => void }) {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
   const { data: alerts = [] } = useAlerts();
   const { data: myReports = [] } = useMyReports();
@@ -106,11 +106,6 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
     const next = !notifOpen;
     setNotifOpen(next);
     if (next) markAllSeen();
-  }
-
-  function handleSignOut() {
-    signOut();
-    router.push("/login");
   }
 
   const dot = (rank: number) =>
@@ -200,10 +195,8 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
                   <p className="text-sm font-semibold text-navy-900">{user?.name}</p>
                   <p className="text-xs text-slate2-500">{user?.phone}</p>
                 </div>
-                <div className="py-1">
-                  <button onClick={handleSignOut} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-danger-600 hover:bg-danger-50 transition-colors">
-                    <Icon name="LogOut" className="w-4 h-4" /> Sign out
-                  </button>
+                <div className="py-2 px-4">
+                  <p className="text-[11px] text-slate2-400">Demo session — no sign-in needed</p>
                 </div>
               </div>
             )}

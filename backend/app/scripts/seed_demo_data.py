@@ -13,12 +13,14 @@ import argparse
 import logging
 from datetime import datetime, timezone
 
+from app.core.security import hash_password
 from app.database import SessionLocal
 from app.gis.points import make_point
 from app.models.alert import Alert
 from app.models.responder import Responder
 from app.models.risk_zone import RiskZone
 from app.models.shelter import Shelter
+from app.models.user import User
 from app.risk.demo_baseline import CHENNAI_DEMO_BBOX, DEMO_CELL_SIZE_DEG, synthetic_baseline
 from app.risk.grid import generate_grid
 
@@ -195,6 +197,41 @@ def seed_shelters(db, force: bool) -> None:
     logger.info("seeded %d demo shelters", len(DEMO_SHELTERS))
 
 
+# Shared demo identity. Login/registration is removed for the demo build —
+# the frontend auto-signs-in as this account so the app opens straight to
+# the home screen. Not a real user; safe to reset.
+DEMO_USER = {
+    "name": "Demo Resident",
+    "phone": "9000000000",
+    "password": "drishtidemo",
+    "role": "citizen",
+}
+
+
+def seed_demo_user(db, force: bool) -> None:
+    existing = db.query(User).filter(User.phone == DEMO_USER["phone"]).first()
+    if existing is not None:
+        if force:
+            existing.name = DEMO_USER["name"]
+            existing.role = DEMO_USER["role"]
+            existing.hashed_password = hash_password(DEMO_USER["password"])
+            db.commit()
+            logger.info("reset demo user %s", DEMO_USER["phone"])
+        else:
+            logger.info("demo user already exists, skipping")
+        return
+    db.add(
+        User(
+            name=DEMO_USER["name"],
+            phone=DEMO_USER["phone"],
+            hashed_password=hash_password(DEMO_USER["password"]),
+            role=DEMO_USER["role"],
+        )
+    )
+    db.commit()
+    logger.info("seeded demo user %s", DEMO_USER["phone"])
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--force", action="store_true", help="wipe and reseed even if data exists")
@@ -202,6 +239,7 @@ def main() -> None:
 
     db = SessionLocal()
     try:
+        seed_demo_user(db, args.force)
         seed_risk_zones(db, args.force)
         seed_shelters(db, args.force)
         seed_responders(db, args.force)

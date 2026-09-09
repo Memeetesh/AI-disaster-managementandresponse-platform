@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { ToastProvider } from "@/lib/toast-context";
 import { Sidebar } from "@/components/citizen/Sidebar";
@@ -20,17 +19,20 @@ const mobileNavItems = [
 
 export default function CitizenLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const router = useRouter();
   const pathname = usePathname();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  useEffect(() => {
-    if (loading) return;
-    if (!user) router.replace("/login");
-  }, [loading, user, router]);
-
-  if (loading || !user) {
+  if (loading) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-slate2-500 bg-slate2-50">Loading…</div>;
+  }
+
+  if (!user) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-2 px-6 text-center bg-slate2-50">
+        <p className="text-sm font-semibold text-navy-900">Can&apos;t reach the DRISHTI server</p>
+        <p className="text-xs text-slate2-500">The backend may be waking up. Refresh in a moment.</p>
+      </div>
+    );
   }
 
   return (

@@ -2,6 +2,7 @@ package com.drishti.citizen.feature.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -21,7 +22,17 @@ fun AppNavHost(
         startDestination = TopLevelDestination.HOME.route,
         modifier = modifier,
     ) {
-        composable(TopLevelDestination.HOME.route) { HomeScreen() }
+        composable(TopLevelDestination.HOME.route) {
+            HomeScreen(
+                onOpenSupport = {
+                    navController.navigate(TopLevelDestination.SUPPORT.route) {
+                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                },
+            )
+        }
         composable(TopLevelDestination.REPORTS.route) { MyReportsScreen() }
         composable(TopLevelDestination.EMERGENCY.route) { EmergencyScreen() }
         composable(TopLevelDestination.FAMILY.route) { FamilyScreen() }

@@ -1,10 +1,20 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { fetchMe } from "@/lib/auth-api";
+import { fetchMe, login as loginRequest, registerCitizen } from "@/lib/auth-api";
 import type { User } from "@/types";
 
 const TOKEN_KEY = "drishti_token";
+
+// Login / registration are removed for the demo build. When there's no
+// valid stored session the app silently signs in as this shared account so
+// it opens straight to the home screen. `registerCitizen` is the fallback
+// in case the backend hasn't been seeded yet (it always creates a citizen).
+const DEMO_CREDENTIALS = {
+  name: "Demo Resident",
+  phone: "9000000000",
+  password: "drishtidemo",
+};
 
 interface AuthContextValue {
   user: User | null;
@@ -21,24 +31,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Hydrate from localStorage on mount, re-validating the token against
-  // the backend rather than trusting whatever role was cached client-side.
+  async function startDemoSession(): Promise<boolean> {
+    try {
+      let res;
+      try {
+        res = await loginRequest({
+          phone: DEMO_CREDENTIALS.phone,
+          password: DEMO_CREDENTIALS.password,
+        });
+      } catch {
+        // Backend reachable but no demo user yet — create it (always a citizen).
+        res = await registerCitizen(DEMO_CREDENTIALS);
+      }
+      window.localStorage.setItem(TOKEN_KEY, res.access_token);
+      setToken(res.access_token);
+      setUser(res.user);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   useEffect(() => {
     async function hydrate() {
       const stored = window.localStorage.getItem(TOKEN_KEY);
-      if (!stored) {
-        setLoading(false);
-        return;
+      if (stored) {
+        try {
+          const me = await fetchMe(stored);
+          setToken(stored);
+          setUser(me);
+          setLoading(false);
+          return;
+        } catch {
+          window.localStorage.removeItem(TOKEN_KEY);
+        }
       }
-      try {
-        const me = await fetchMe(stored);
-        setToken(stored);
-        setUser(me);
-      } catch {
-        window.localStorage.removeItem(TOKEN_KEY);
-      } finally {
-        setLoading(false);
-      }
+      await startDemoSession();
+      setLoading(false);
     }
     void hydrate();
   }, []);
@@ -53,6 +82,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.localStorage.removeItem(TOKEN_KEY);
     setToken(null);
     setUser(null);
+    // No login screen in the demo build — drop straight back into a fresh
+    // demo session.
+    setLoading(true);
+    void startDemoSession().finally(() => setLoading(false));
   }
 
   return (

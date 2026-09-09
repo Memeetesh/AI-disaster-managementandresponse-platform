@@ -73,11 +73,10 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (loading) return;
-    if (!user) {
-      router.replace("/login");
-      return;
-    }
-    if (user.role !== "responder" && user.role !== "admin") {
+    // Login is removed for the demo — the auto-session is a citizen, so the
+    // command dashboard just routes home. (Responder/admin access returns
+    // when the dashboard track resumes.)
+    if (!user || (user.role !== "responder" && user.role !== "admin")) {
       router.replace("/");
     }
   }, [loading, user, router]);
