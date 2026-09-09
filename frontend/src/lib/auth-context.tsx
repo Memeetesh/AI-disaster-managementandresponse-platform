@@ -66,6 +66,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           window.localStorage.removeItem(TOKEN_KEY);
         }
       }
+      // An operator may have signed in via /login while we were hydrating —
+      // don't clobber that session with the citizen demo account.
+      if (window.localStorage.getItem(TOKEN_KEY)) {
+        setLoading(false);
+        return;
+      }
       await startDemoSession();
       setLoading(false);
     }

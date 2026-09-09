@@ -197,39 +197,54 @@ def seed_shelters(db, force: bool) -> None:
     logger.info("seeded %d demo shelters", len(DEMO_SHELTERS))
 
 
-# Shared demo identity. Login/registration is removed for the demo build —
-# the frontend auto-signs-in as this account so the app opens straight to
-# the home screen. Not a real user; safe to reset.
-DEMO_USER = {
-    "name": "Demo Resident",
-    "phone": "9000000000",
-    "password": "drishtidemo",
-    "role": "citizen",
-}
+# Shared demo identities. Login/registration is removed for the *citizen*
+# demo build — the frontend auto-signs-in as the resident so the app opens
+# straight to the home screen. The operator account is what you log into on
+# the /login page to reach the responder dashboard (e.g. to watch an SOS
+# from the Android app land live). Not real users; safe to reset.
+DEMO_USERS = [
+    {
+        "name": "Demo Resident",
+        "phone": "9000000000",
+        "password": "drishtidemo",
+        "role": "citizen",
+    },
+    {
+        "name": "Command Center Admin",
+        "phone": "9000000001",
+        "password": "drishtiops",
+        "role": "admin",
+    },
+]
 
 
-def seed_demo_user(db, force: bool) -> None:
-    existing = db.query(User).filter(User.phone == DEMO_USER["phone"]).first()
+def _upsert_user(db, spec: dict, force: bool) -> None:
+    existing = db.query(User).filter(User.phone == spec["phone"]).first()
     if existing is not None:
         if force:
-            existing.name = DEMO_USER["name"]
-            existing.role = DEMO_USER["role"]
-            existing.hashed_password = hash_password(DEMO_USER["password"])
+            existing.name = spec["name"]
+            existing.role = spec["role"]
+            existing.hashed_password = hash_password(spec["password"])
             db.commit()
-            logger.info("reset demo user %s", DEMO_USER["phone"])
+            logger.info("reset demo user %s (%s)", spec["phone"], spec["role"])
         else:
-            logger.info("demo user already exists, skipping")
+            logger.info("demo user %s already exists, skipping", spec["phone"])
         return
     db.add(
         User(
-            name=DEMO_USER["name"],
-            phone=DEMO_USER["phone"],
-            hashed_password=hash_password(DEMO_USER["password"]),
-            role=DEMO_USER["role"],
+            name=spec["name"],
+            phone=spec["phone"],
+            hashed_password=hash_password(spec["password"]),
+            role=spec["role"],
         )
     )
     db.commit()
-    logger.info("seeded demo user %s", DEMO_USER["phone"])
+    logger.info("seeded demo user %s (%s)", spec["phone"], spec["role"])
+
+
+def seed_demo_user(db, force: bool) -> None:
+    for spec in DEMO_USERS:
+        _upsert_user(db, spec, force)
 
 
 def main() -> None:
