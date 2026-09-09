@@ -5,9 +5,21 @@ import com.drishti.citizen.core.cache.ResponseCache
 import com.drishti.citizen.data.remote.ApiService
 import com.drishti.citizen.data.remote.dto.AlertDto
 import com.drishti.citizen.data.remote.dto.AuthResponseDto
+import com.drishti.citizen.data.remote.dto.AddFamilyMemberRequest
+import com.drishti.citizen.data.remote.dto.ChatRequest
+import com.drishti.citizen.data.remote.dto.ChatResponseDto
+import com.drishti.citizen.data.remote.dto.CheckInDto
+import com.drishti.citizen.data.remote.dto.CheckInRequest
 import com.drishti.citizen.data.remote.dto.CycloneForecastDto
+import com.drishti.citizen.data.remote.dto.FamilyMemberDto
+import com.drishti.citizen.data.remote.dto.FamilyRequestDto
+import com.drishti.citizen.data.remote.dto.FamilyRequestResponse
 import com.drishti.citizen.data.remote.dto.FloodForecastDto
+import com.drishti.citizen.data.remote.dto.IncidentDto
 import com.drishti.citizen.data.remote.dto.LandslideForecastDto
+import com.drishti.citizen.data.remote.dto.LocationPingRequest
+import com.drishti.citizen.data.remote.dto.LocationSharingStateDto
+import com.drishti.citizen.data.remote.dto.LocationSharingUpdateRequest
 import com.drishti.citizen.data.remote.dto.LoginRequest
 import com.drishti.citizen.data.remote.dto.NearbyPlaceDto
 import com.drishti.citizen.data.remote.dto.NearbyShelterDto
@@ -41,6 +53,35 @@ open class FakeApiService : ApiService {
     override suspend fun flood(lat: Double, lon: Double): FloodForecastDto = error("not stubbed")
     override suspend fun cyclone(lat: Double, lon: Double): CycloneForecastDto = error("not stubbed")
     override suspend fun landslide(lat: Double, lon: Double): LandslideForecastDto = error("not stubbed")
+    override suspend fun incidents(limit: Int?): List<IncidentDto> = error("not stubbed")
+    override suspend fun incident(id: Int): IncidentDto = error("not stubbed")
+    override suspend fun submitReport(
+        latitude: okhttp3.RequestBody,
+        longitude: okhttp3.RequestBody,
+        type: okhttp3.RequestBody,
+        peopleAffected: okhttp3.RequestBody,
+        description: okhttp3.RequestBody?,
+        image: okhttp3.MultipartBody.Part?,
+        audio: okhttp3.MultipartBody.Part?,
+    ): IncidentDto = error("not stubbed")
+    override suspend fun submitSos(
+        latitude: okhttp3.RequestBody,
+        longitude: okhttp3.RequestBody,
+        peopleAffected: okhttp3.RequestBody,
+        description: okhttp3.RequestBody?,
+    ): IncidentDto = error("not stubbed")
+    override suspend fun createCheckIn(body: CheckInRequest): CheckInDto = error("not stubbed")
+    override suspend fun myCheckIn(): CheckInDto? = error("not stubbed")
+    override suspend fun family(lat: Double?, lon: Double?): List<FamilyMemberDto> = error("not stubbed")
+    override suspend fun addFamilyMember(body: AddFamilyMemberRequest): FamilyMemberDto = error("not stubbed")
+    override suspend fun removeFamilyMember(id: Int) = error("not stubbed")
+    override suspend fun familyRequests(): List<FamilyRequestDto> = error("not stubbed")
+    override suspend fun respondToFamilyRequest(id: Int, body: FamilyRequestResponse) = error("not stubbed")
+    override suspend fun locationSharing(): LocationSharingStateDto = error("not stubbed")
+    override suspend fun setLocationSharing(body: LocationSharingUpdateRequest): LocationSharingStateDto =
+        error("not stubbed")
+    override suspend fun pingLocation(body: LocationPingRequest): LocationSharingStateDto = error("not stubbed")
+    override suspend fun supportChat(body: ChatRequest): ChatResponseDto = error("not stubbed")
 }
 
 /** In-memory [ResponseCache] backed by the real [Json] so round-trips are exercised. */

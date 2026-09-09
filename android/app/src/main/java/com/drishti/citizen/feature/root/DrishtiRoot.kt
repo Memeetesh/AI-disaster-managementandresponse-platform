@@ -24,11 +24,15 @@ import com.drishti.citizen.feature.navigation.AppRoot
 @Composable
 fun DrishtiRoot(viewModel: RootViewModel = hiltViewModel()) {
     val authState by viewModel.authState.collectAsStateWithLifecycle()
+    val realtimeConnected by viewModel.realtimeConnected.collectAsStateWithLifecycle()
 
     when (authState) {
         AuthState.Loading -> SplashScreen()
         AuthState.SignedOut -> AuthScreen()
-        is AuthState.SignedIn -> AppRoot(onSignOut = viewModel::signOut)
+        is AuthState.SignedIn -> AppRoot(
+            onSignOut = viewModel::signOut,
+            realtimeConnected = realtimeConnected,
+        )
     }
 }
 

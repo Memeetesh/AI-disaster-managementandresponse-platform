@@ -45,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.drishti.citizen.core.location.LocationUiState
 import com.drishti.citizen.core.ui.component.Sparkline
 import com.drishti.citizen.core.ui.theme.Danger100
 import com.drishti.citizen.core.ui.theme.Danger500

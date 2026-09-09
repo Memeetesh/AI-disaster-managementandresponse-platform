@@ -2,9 +2,21 @@ package com.drishti.citizen.data.remote
 
 import com.drishti.citizen.data.remote.dto.AlertDto
 import com.drishti.citizen.data.remote.dto.AuthResponseDto
+import com.drishti.citizen.data.remote.dto.ChatRequest
+import com.drishti.citizen.data.remote.dto.ChatResponseDto
+import com.drishti.citizen.data.remote.dto.CheckInDto
+import com.drishti.citizen.data.remote.dto.CheckInRequest
+import com.drishti.citizen.data.remote.dto.AddFamilyMemberRequest
 import com.drishti.citizen.data.remote.dto.CycloneForecastDto
+import com.drishti.citizen.data.remote.dto.FamilyMemberDto
+import com.drishti.citizen.data.remote.dto.FamilyRequestDto
+import com.drishti.citizen.data.remote.dto.FamilyRequestResponse
 import com.drishti.citizen.data.remote.dto.FloodForecastDto
+import com.drishti.citizen.data.remote.dto.IncidentDto
 import com.drishti.citizen.data.remote.dto.LandslideForecastDto
+import com.drishti.citizen.data.remote.dto.LocationPingRequest
+import com.drishti.citizen.data.remote.dto.LocationSharingStateDto
+import com.drishti.citizen.data.remote.dto.LocationSharingUpdateRequest
 import com.drishti.citizen.data.remote.dto.LoginRequest
 import com.drishti.citizen.data.remote.dto.NearbyPlaceDto
 import com.drishti.citizen.data.remote.dto.NearbyShelterDto
@@ -12,9 +24,16 @@ import com.drishti.citizen.data.remote.dto.RainfallForecastDto
 import com.drishti.citizen.data.remote.dto.RegisterRequest
 import com.drishti.citizen.data.remote.dto.RiskMapResponseDto
 import com.drishti.citizen.data.remote.dto.UserDto
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.PUT
+import retrofit2.http.Part
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 /**
@@ -70,4 +89,83 @@ interface ApiService {
 
     @GET("weather/landslide")
     suspend fun landslide(@Query("lat") lat: Double, @Query("lon") lon: Double): LandslideForecastDto
+
+    // --- reports (Phase 3) ---
+
+    /** Citizens get only their own rows server-side. */
+    @GET("incidents")
+    suspend fun incidents(@Query("limit") limit: Int? = null): List<IncidentDto>
+
+    @GET("incidents/{id}")
+    suspend fun incident(@Path("id") id: Int): IncidentDto
+
+    /**
+     * `POST /reports` — field names must match `backend/app/api/reports.py`
+     * (`type`, not `type_`; the endpoint aliases it).
+     */
+    @Multipart
+    @POST("reports")
+    suspend fun submitReport(
+        @Part("latitude") latitude: RequestBody,
+        @Part("longitude") longitude: RequestBody,
+        @Part("type") type: RequestBody,
+        @Part("people_affected") peopleAffected: RequestBody,
+        @Part("description") description: RequestBody?,
+        @Part image: MultipartBody.Part?,
+        @Part audio: MultipartBody.Part?,
+    ): IncidentDto
+
+    // --- emergency (Phase 4) ---
+
+    /** Single-shot emergency submission; defaults to CRITICAL severity server-side. */
+    @Multipart
+    @POST("sos")
+    suspend fun submitSos(
+        @Part("latitude") latitude: RequestBody,
+        @Part("longitude") longitude: RequestBody,
+        @Part("people_affected") peopleAffected: RequestBody,
+        @Part("description") description: RequestBody?,
+    ): IncidentDto
+
+    @POST("check-in")
+    suspend fun createCheckIn(@Body body: CheckInRequest): CheckInDto
+
+    /** Null when the caller has never checked in. */
+    @GET("check-in/me")
+    suspend fun myCheckIn(): CheckInDto?
+
+    // --- family (Phase 5) ---
+
+    @GET("family")
+    suspend fun family(
+        @Query("lat") lat: Double? = null,
+        @Query("lon") lon: Double? = null,
+    ): List<FamilyMemberDto>
+
+    @POST("family")
+    suspend fun addFamilyMember(@Body body: AddFamilyMemberRequest): FamilyMemberDto
+
+    @DELETE("family/{id}")
+    suspend fun removeFamilyMember(@Path("id") id: Int)
+
+    @GET("family/requests")
+    suspend fun familyRequests(): List<FamilyRequestDto>
+
+    @POST("family/requests/{id}/respond")
+    suspend fun respondToFamilyRequest(@Path("id") id: Int, @Body body: FamilyRequestResponse)
+
+    @GET("family/location-sharing")
+    suspend fun locationSharing(): LocationSharingStateDto
+
+    @PUT("family/location-sharing")
+    suspend fun setLocationSharing(@Body body: LocationSharingUpdateRequest): LocationSharingStateDto
+
+    @POST("family/location-sharing/ping")
+    suspend fun pingLocation(@Body body: LocationPingRequest): LocationSharingStateDto
+
+    // --- support (Phase 6) ---
+
+    /** Never errors the client — returns a safe canned reply if the model is down. */
+    @POST("chat/support")
+    suspend fun supportChat(@Body body: ChatRequest): ChatResponseDto
 }

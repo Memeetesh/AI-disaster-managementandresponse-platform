@@ -6,7 +6,10 @@ import com.drishti.citizen.core.auth.AuthState
 import com.drishti.citizen.core.auth.SessionManager
 import com.drishti.citizen.core.location.LatLon
 import com.drishti.citizen.core.location.LocationProvider
+import com.drishti.citizen.core.location.LocationUiState
 import com.drishti.citizen.core.network.DataResult
+import com.drishti.citizen.core.realtime.RealtimeBus
+import com.drishti.citizen.core.realtime.RealtimeEvent
 import com.drishti.citizen.data.model.Alerts
 import com.drishti.citizen.data.model.RiskCard
 import com.drishti.citizen.data.model.RiskCards
@@ -30,15 +33,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-
-sealed interface LocationUiState {
-    data object PermissionNeeded : LocationUiState
-    data object Locating : LocationUiState
-    data class Ready(val at: LatLon) : LocationUiState
-
-    /** Permission granted, but no fix and nothing cached. */
-    data object Unavailable : LocationUiState
-}
 
 data class HomeUiState(
     val loading: Boolean = true,
@@ -65,6 +59,7 @@ class HomeViewModel @Inject constructor(
     private val weatherRepository: WeatherRepository,
     private val sheltersRepository: SheltersRepository,
     private val placesRepository: PlacesRepository,
+    realtimeBus: RealtimeBus,
     sessionManager: SessionManager,
 ) : ViewModel() {
 
@@ -77,6 +72,20 @@ class HomeViewModel @Inject constructor(
 
     init {
         load(isRefresh = false)
+        viewModelScope.launch {
+            realtimeBus.events.collect { event ->
+                when (event) {
+                    RealtimeEvent.RiskUpdated,
+                    RealtimeEvent.AlertsChanged,
+                    RealtimeEvent.ShelterUpdated,
+                    RealtimeEvent.Reconnected,
+                    is RealtimeEvent.IncidentChanged,
+                    -> load(isRefresh = true)
+
+                    RealtimeEvent.FamilyUpdated -> Unit
+                }
+            }
+        }
     }
 
     fun refresh() = load(isRefresh = true)

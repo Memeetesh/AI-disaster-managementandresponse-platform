@@ -23,4 +23,15 @@ class PlacesRepository @Inject constructor(
         "places/shelter/${at.cacheKey()}",
         ListSerializer(NearbyPlaceDto.serializer()),
     ) { api.nearbyPlaces(at.lat, at.lon, kind = "shelter", radiusKm = radiusKm, limit = limit) }
+
+    /** Real hospitals near the user, for the Emergency screen's quick action. */
+    suspend fun nearbyHospitals(
+        at: LatLon,
+        radiusKm: Double = 12.0,
+        limit: Int = 5,
+    ): DataResult<List<NearbyPlaceDto>> = cachedResource(
+        cache,
+        "places/hospital/${at.cacheKey()}",
+        ListSerializer(NearbyPlaceDto.serializer()),
+    ) { api.nearbyPlaces(at.lat, at.lon, kind = "hospital", radiusKm = radiusKm, limit = limit) }
 }

@@ -5,6 +5,7 @@ app boots without a .env file, but production deployments must override
 JWT_SECRET and DATABASE_URL at minimum.
 """
 import json
+import os
 from functools import lru_cache
 from typing import Annotated
 
@@ -54,6 +55,24 @@ class Settings(BaseSettings):
 
     # --- Redis (pub/sub for WebSocket fan-out, optional) ---
     REDIS_URL: str = "redis://localhost:6379/0"
+
+    # --- Keep-alive (free-tier hosts sleep after ~15 min idle) ---
+    # On Render, RENDER_EXTERNAL_URL is injected automatically; the app then
+    # pings its own /health on an interval so the instance stays warm while
+    # it's running. No-ops locally (no external URL). It CANNOT wake an
+    # already-sleeping instance — for that use an external pinger
+    # (.github/workflows/keepalive.yml or UptimeRobot). Set KEEP_ALIVE=false
+    # to turn it off; KEEP_ALIVE_URL overrides the auto-detected target.
+    KEEP_ALIVE: bool = True
+    KEEP_ALIVE_URL: str | None = None
+    KEEP_ALIVE_INTERVAL_SECONDS: int = 600
+
+    @property
+    def keep_alive_target(self) -> str | None:
+        base = self.KEEP_ALIVE_URL or os.environ.get("RENDER_EXTERNAL_URL")
+        if not base:
+            return None
+        return base.rstrip("/") + self.API_PREFIX + "/health"
 
     # --- External integrations (all optional; app must degrade gracefully) ---
     IMD_API_KEY: str | None = None

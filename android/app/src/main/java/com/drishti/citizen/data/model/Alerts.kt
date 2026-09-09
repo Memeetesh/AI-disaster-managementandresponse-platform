@@ -1,5 +1,6 @@
 package com.drishti.citizen.data.model
 
+import com.drishti.citizen.core.ui.component.BadgeTone
 import com.drishti.citizen.data.remote.dto.AlertDto
 import java.time.Instant
 import kotlin.math.roundToLong
@@ -30,6 +31,13 @@ object Alerts {
     }
 
     fun severityLabel(severity: String): String = severity.replace('_', ' ')
+
+    /** Chip colour for the authority-messages timeline (web: navy / warn / danger). */
+    fun severityTone(severity: String): BadgeTone = when (severity) {
+        "low" -> BadgeTone.INFO
+        "moderate" -> BadgeTone.WARN
+        else -> BadgeTone.DANGER
+    }
 
     fun relativeTime(iso: String, nowEpochMs: Long = System.currentTimeMillis()): String {
         val issuedAt = runCatching { Instant.parse(iso).toEpochMilli() }.getOrNull() ?: return "—"

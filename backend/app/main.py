@@ -1,20 +1,37 @@
+import asyncio
 import logging
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from app import keepalive
 from app.api.router import api_router
 from app.config import settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("drishti")
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    keepalive_task = keepalive.start()
+    try:
+        yield
+    finally:
+        if keepalive_task is not None:
+            keepalive_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await keepalive_task
+
+
 app = FastAPI(
     title=settings.APP_NAME,
     description="AI-Powered Disaster Intelligence, Response & Situational Awareness System",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

@@ -12,6 +12,7 @@ val Navy600 = Color(0xFF2A4374)
 val Navy100 = Color(0xFFE2E8F5)
 val Navy50 = Color(0xFFF1F5FC)
 
+val Danger700 = Color(0xFFB91C1C)
 val Danger600 = Color(0xFFDC2626)
 val Danger500 = Color(0xFFEF4444)
 val Danger100 = Color(0xFFFEE2E2)
