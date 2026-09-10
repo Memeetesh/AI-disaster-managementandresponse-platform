@@ -67,9 +67,9 @@ elif choice == "2":
     # VIDEO FILE
     # --------------------------------------------------------
 
-    video_path = "/Users/tanshunishad/Desktop/SIH/video.mp4"
+    video_path = "/Users/tanshunishad/Desktop/SIH/Nepal.mp4"
 
-    cap = cv2.VideoCapture(URL if video_path.startswith("https://youtube.com/shorts/FQMZbFgXmo4?si=kL-H4OK7XpctN3yk") else video_path)
+    cap = cv2.VideoCapture(URL if video_path.startswith("https://youtu.be/3JzHYkJfVEw?si=aXOJdi1--pB3nucZ") else video_path)
 
     if not cap.isOpened():
         print("ERROR: Could not open video file.")
