@@ -60,7 +60,7 @@ export function SOSModal({ onClose, onSent, token, location }: SOSModalProps) {
         latitude: location.lat,
         longitude: location.lon,
         peopleAffected: 1,
-        description: "Emergency SOS sent from the DRISHTI app.",
+        description: "Emergency SOS sent from the Aasha Setu app.",
       });
       if (countdownRef.current) clearInterval(countdownRef.current);
       onSent();

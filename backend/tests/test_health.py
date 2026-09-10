@@ -9,4 +9,4 @@ def test_health_ok(client):
 def test_root(client):
     resp = client.get("/")
     assert resp.status_code == 200
-    assert resp.json()["service"] == "DRISHTI"
+    assert resp.json()["service"] == "Aasha Setu"

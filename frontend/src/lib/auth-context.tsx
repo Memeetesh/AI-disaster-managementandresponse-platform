@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { fetchMe, login as loginRequest, registerCitizen } from "@/lib/auth-api";
 import type { User } from "@/types";
 
-const TOKEN_KEY = "drishti_token";
+const TOKEN_KEY = "aasha_setu_token";
 
 // Login / registration are removed for the demo build. When there's no
 // valid stored session the app silently signs in as this shared account so

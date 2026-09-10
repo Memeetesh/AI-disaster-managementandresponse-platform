@@ -25,7 +25,7 @@ object FamilyMembers {
     fun detailLine(member: FamilyMemberDto, nowEpochMs: Long = System.currentTimeMillis()): String = when {
         member.status == "invite_pending" -> "Waiting for them to accept"
         member.status == "invite_declined" -> "They declined the request"
-        !member.onDrishti -> "Not a DRISHTI user"
+        !member.onDrishti -> "Not on Aasha Setu"
         member.lastCheckInAt != null -> "Checked in ${Alerts.relativeTime(member.lastCheckInAt, nowEpochMs)}"
         else -> "No check-in yet"
     }

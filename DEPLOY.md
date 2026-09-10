@@ -1,4 +1,4 @@
-# How to put DRISHTI online
+# How to put Aasha Setu online
 
 You will use three free websites:
 
@@ -27,7 +27,7 @@ git push origin main
 
 1. Go to **https://supabase.com** and sign in with GitHub.
 2. Click **New project**.
-   - Give it a name (e.g. `drishti`).
+   - Give it a name (e.g. `aasha-setu`).
    - Set a **database password** and save it somewhere.
    - Pick the region closest to you.
    - Click **Create new project** and wait ~2 minutes.
@@ -85,7 +85,7 @@ Quick check: open `BACKEND_URL/api/v1/health` in a browser. You should see
      |-----|-------|
      | `NEXT_PUBLIC_API_URL` | your `BACKEND_URL` **plus `/api/v1`** — e.g. `https://drishti-api.onrender.com/api/v1` |
 4. Click **Deploy** and wait ~1 minute.
-5. Vercel gives you a link like `https://drishti-xxxx.vercel.app`.
+5. Vercel gives you a link like `https://aasha-setu-xxxx.vercel.app`.
 
 **COPY THIS** — call it `FRONTEND_URL`.
 
@@ -99,7 +99,7 @@ Right now the backend blocks the frontend. Fix it:
 2. Add one more variable:
    | Key | Value |
    |-----|-------|
-   | `CORS_ORIGINS` | your `FRONTEND_URL` — e.g. `https://drishti-xxxx.vercel.app` |
+   | `CORS_ORIGINS` | your `FRONTEND_URL` — e.g. `https://aasha-setu-xxxx.vercel.app` |
 3. **Save Changes**. Render redeploys.
 
 Now open your `FRONTEND_URL`. Register an account and log in — the home page

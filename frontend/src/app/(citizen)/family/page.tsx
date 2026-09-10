@@ -197,7 +197,7 @@ export default function FamilyPage() {
           addToast(
             m.link_status === "pending"
               ? `Request sent to ${m.name}. You'll see their status once they accept.`
-              : `${m.name} added as a saved contact (not on DRISHTI yet).`,
+              : `${m.name} added as a saved contact (not on Aasha Setu yet).`,
             "success"
           );
         },
@@ -258,7 +258,7 @@ export default function FamilyPage() {
           </div>
           <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Your Family, Connected &amp; Safe</h1>
           <p className="text-sm text-navy-300 max-w-md">
-            Add loved ones by phone. If they use DRISHTI and accept, their live
+            Add loved ones by phone. If they use Aasha Setu and accept, their live
             safety status shows here from their own check-ins.
           </p>
 
@@ -507,7 +507,7 @@ export default function FamilyPage() {
                             : m.status === "invite_declined"
                               ? "They declined the request"
                               : !m.on_drishti
-                                ? "Not a DRISHTI user"
+                                ? "Not a Aasha Setu user"
                                 : m.last_check_in_at
                                   ? `Checked in ${timeAgo(m.last_check_in_at)}`
                                   : "No check-in yet"}

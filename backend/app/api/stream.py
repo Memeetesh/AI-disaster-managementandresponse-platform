@@ -22,7 +22,7 @@ from app.database import SessionLocal
 from app.events.broker import broker
 from app.models.user import User
 
-logger = logging.getLogger("drishti.events")
+logger = logging.getLogger("aasha_setu.events")
 
 router = APIRouter(tags=["stream"])
 

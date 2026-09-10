@@ -61,8 +61,13 @@ export default function HomePage() {
   // Realtime (src/lib/realtime.tsx) invalidates these on `risk.updated` /
   // `alert.*`, so the flood card, shelter list, and alert banner stay live.
   // On error the page still renders — it falls back to the demo risk cards.
-  const lat = location.status === "ok" ? location.lat : null;
-  const lon = location.status === "ok" ? location.lon : null;
+  // If the browser denies / can't resolve geolocation (common on a laptop
+  // on stage), fall back to NEXT_PUBLIC_DEMO_LAT/LON so the cards still show
+  // real, location-based forecasts.
+  const demoLat = Number(process.env.NEXT_PUBLIC_DEMO_LAT) || null;
+  const demoLon = Number(process.env.NEXT_PUBLIC_DEMO_LON) || null;
+  const lat = location.status === "ok" ? location.lat : demoLat;
+  const lon = location.status === "ok" ? location.lon : demoLon;
 
   const riskMapQuery = useRiskMap();
   const alertsQuery = useAlerts();

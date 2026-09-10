@@ -1,4 +1,4 @@
-# DRISHTI — Architecture
+# Aasha Setu — Architecture
 
 AI-Powered Disaster Intelligence, Response & Situational Awareness System.
 Demonstration disaster: **urban flooding**. Architecture is disaster-type-agnostic
@@ -66,7 +66,7 @@ so a dead external API degrades a feature, it never crashes the demo.
 ## C. Repository structure
 
 ```
-drishti/
+aasha-setu/
 ├── frontend/                 Next.js PWA (citizen app + responder dashboard)
 │   ├── src/app/               routes (App Router)
 │   ├── src/components/

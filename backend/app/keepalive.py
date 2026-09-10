@@ -20,7 +20,7 @@ import httpx
 
 from app.config import settings
 
-logger = logging.getLogger("drishti.keepalive")
+logger = logging.getLogger("aasha_setu.keepalive")
 
 
 async def _loop(url: str, interval: int) -> None:

@@ -9,7 +9,7 @@ import { alertRelativeTime, alertSourceLabel, SEVERITY_RANK } from "@/lib/alerts
 import { useOutsideClick } from "@/hooks/useOutsideClick";
 import type { IncidentStatus } from "@/types";
 
-const SEEN_KEY = "drishti_notifs_seen";
+const SEEN_KEY = "aasha_setu_notifs_seen";
 
 function loadSeen(): Set<string> {
   try {
@@ -119,7 +119,7 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
             <Icon name="Menu" className="w-5 h-5" />
           </button>
           <div className="hidden sm:block">
-            <p className="text-sm font-semibold text-navy-800">DRISHTI</p>
+            <p className="text-sm font-semibold text-navy-800">Aasha Setu</p>
             <p className="text-[11px] text-slate2-500">Disaster Management &amp; Community Resilience</p>
           </div>
         </div>

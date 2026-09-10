@@ -1,4 +1,4 @@
-# DRISHTI — Citizen Android app
+# Aasha Setu — Citizen Android app
 
 Native Android client that replicates the web citizen app
 (`frontend/src/app/(citizen)`), backed by the same FastAPI API

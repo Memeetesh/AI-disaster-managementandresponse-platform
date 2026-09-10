@@ -448,7 +448,7 @@ private fun LocationRationaleCard(onGrant: () -> Unit) {
             Text("Share your location", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(4.dp))
             Text(
-                "DRISHTI uses a single location fix to show the flood risk for your area, " +
+                "Aasha Setu uses a single location fix to show the flood risk for your area, " +
                     "nearby shelters, and local weather forecasts. It is never shared or tracked in the background.",
                 style = MaterialTheme.typography.bodySmall,
                 color = Slate500,

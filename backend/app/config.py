@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # --- App ---
-    APP_NAME: str = "DRISHTI"
+    APP_NAME: str = "Aasha Setu"
     ENVIRONMENT: str = "development"
     API_PREFIX: str = "/api/v1"
     # Accepts a JSON array OR a plain comma-separated list in the env var, e.g.
@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # --- Database (PostgreSQL + PostGIS, e.g. Supabase) ---
     # A bare `postgres://` / `postgresql://` URL (what Supabase/Heroku hand out)
     # is auto-rewritten to the `postgresql+psycopg2://` form SQLAlchemy needs.
+    # The local-dev default keeps the legacy `drishti` role/db name — it's an
+    # internal identifier, never user-facing; production always overrides via
+    # the DATABASE_URL env var.
     DATABASE_URL: str = "postgresql+psycopg2://drishti:drishti@localhost:5432/drishti"
 
     @field_validator("CORS_ORIGINS", mode="before")
@@ -66,6 +69,13 @@ class Settings(BaseSettings):
     KEEP_ALIVE: bool = True
     KEEP_ALIVE_URL: str | None = None
     KEEP_ALIVE_INTERVAL_SECONDS: int = 600
+
+    # --- Demo warm-up ---
+    # On boot, pre-fetch the four weather forecasts for this point so the
+    # citizen home cards show real data on the first page load. Set to your
+    # demo venue's coordinates before a presentation.
+    DEMO_LAT: float | None = None
+    DEMO_LON: float | None = None
 
     @property
     def keep_alive_target(self) -> str | None:

@@ -3,7 +3,7 @@
 Deliberately an in-memory singleton, NOT a database table: this is
 presenter/demo control state for a single-worker dev server, not
 operational data that needs to survive a restart or be shared across
-processes. If DRISHTI is ever run with multiple Uvicorn workers this must
+processes. If Aasha Setu is ever run with multiple Uvicorn workers this must
 move to Redis (already in the stack) — noted here, not built now, since a
 single-worker demo doesn't need it.
 

@@ -234,6 +234,6 @@ class EmergencyViewModel @Inject constructor(
         const val HOLD_DURATION_MS = 3_000L
         const val HOLD_STEP_MS = 50L
         const val SUBMIT_FIX_WAIT_MS = 5_000L
-        const val SOS_DESCRIPTION = "Emergency SOS sent from the DRISHTI app."
+        const val SOS_DESCRIPTION = "Emergency SOS sent from the Aasha Setu app."
     }
 }

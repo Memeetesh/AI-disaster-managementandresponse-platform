@@ -29,7 +29,7 @@ export default function CitizenLayout({ children }: { children: React.ReactNode 
   if (!user) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-2 px-6 text-center bg-slate2-50">
-        <p className="text-sm font-semibold text-navy-900">Can&apos;t reach the DRISHTI server</p>
+        <p className="text-sm font-semibold text-navy-900">Can&apos;t reach the Aasha Setu server</p>
         <p className="text-xs text-slate2-500">The backend may be waking up. Refresh in a moment.</p>
       </div>
     );

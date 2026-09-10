@@ -17,7 +17,7 @@ import asyncio
 import logging
 from typing import Any
 
-logger = logging.getLogger("drishti.events")
+logger = logging.getLogger("aasha_setu.events")
 
 # Per-subscriber backpressure bound. A consumer that falls this far behind
 # is treated as broken: we drop its oldest events rather than let the queue

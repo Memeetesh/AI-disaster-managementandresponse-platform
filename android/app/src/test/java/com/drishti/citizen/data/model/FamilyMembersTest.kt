@@ -46,7 +46,7 @@ class FamilyMembersTest {
     fun `detail line follows the web's conditionals`() {
         assertEquals("Waiting for them to accept", FamilyMembers.detailLine(member("invite_pending")))
         assertEquals("They declined the request", FamilyMembers.detailLine(member("invite_declined")))
-        assertEquals("Not a DRISHTI user", FamilyMembers.detailLine(member("no_checkin", onDrishti = false)))
+        assertEquals("Not on Aasha Setu", FamilyMembers.detailLine(member("no_checkin", onDrishti = false)))
         assertEquals("No check-in yet", FamilyMembers.detailLine(member("no_checkin")))
 
         val now = java.time.Instant.parse("2026-09-09T12:00:00Z").toEpochMilli()

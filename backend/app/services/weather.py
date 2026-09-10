@@ -13,7 +13,7 @@ import time
 
 import httpx
 
-logger = logging.getLogger("drishti.weather")
+logger = logging.getLogger("aasha_setu.weather")
 
 _OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 _OPEN_METEO_FLOOD_URL = "https://flood-api.open-meteo.com/v1/flood"
@@ -23,11 +23,42 @@ _OPEN_METEO_ELEVATION_URL = "https://api.open-meteo.com/v1/elevation"
 # regularly needs >4s. Too tight here means the route 502s and the card
 # silently falls back to demo data.
 _TIMEOUT_S = 12.0
-_CACHE_TTL_S = 900  # 15 minutes
+# Long on purpose. A forecast doesn't meaningfully change in a few hours,
+# and once we have a *real* value we want to keep showing it — a fresh miss
+# should never drop the card back to demo data mid-demo.
+_CACHE_TTL_S = 6 * 3600  # 6 hours
 _cache: dict[tuple[float, float], tuple[float, dict]] = {}
 _flood_cache: dict[tuple[float, float], tuple[float, dict]] = {}
 _cyclone_cache: dict[tuple[float, float], tuple[float, dict]] = {}
 _landslide_cache: dict[tuple[float, float], tuple[float, dict]] = {}
+
+
+def _serve(
+    cache: dict[tuple[float, float], tuple[float, dict]],
+    key: tuple[float, float],
+    fetch,
+    label: str,
+) -> dict:
+    """Cache read-through with stale-on-error: a fresh hit is returned as-is;
+    otherwise we try `fetch()`, and if that fails we fall back to any cached
+    value (however old) before giving up. Real-but-stale always beats the
+    frontend's demo card."""
+    now = time.monotonic()
+    hit = cache.get(key)
+    if hit is not None and now - hit[0] < _CACHE_TTL_S:
+        return hit[1]
+    try:
+        data = fetch()
+    except Exception as exc:  # noqa: BLE001 - upstream (Open-Meteo) failure
+        if hit is not None:
+            logger.warning(
+                "%s fetch failed (%s); serving cached value from %.0fs ago",
+                label, exc, now - hit[0],
+            )
+            return hit[1]
+        raise
+    cache[key] = (now, data)
+    return data
 
 
 def _classify(rain_mm: float) -> str:
@@ -91,14 +122,7 @@ def _fetch(lat: float, lon: float) -> dict:
 
 
 def get_rainfall_forecast(lat: float, lon: float) -> dict:
-    key = (round(lat, 2), round(lon, 2))
-    now = time.monotonic()
-    hit = _cache.get(key)
-    if hit is not None and now - hit[0] < _CACHE_TTL_S:
-        return hit[1]
-    data = _fetch(lat, lon)
-    _cache[key] = (now, data)
-    return data
+    return _serve(_cache, (round(lat, 2), round(lon, 2)), lambda: _fetch(lat, lon), "rainfall")
 
 
 # --- Flood forecast (GloFAS river discharge via Open-Meteo Flood API) --------
@@ -189,14 +213,9 @@ def _fetch_flood(lat: float, lon: float) -> dict:
 
 
 def get_flood_forecast(lat: float, lon: float) -> dict:
-    key = (round(lat, 2), round(lon, 2))
-    now = time.monotonic()
-    hit = _flood_cache.get(key)
-    if hit is not None and now - hit[0] < _CACHE_TTL_S:
-        return hit[1]
-    data = _fetch_flood(lat, lon)
-    _flood_cache[key] = (now, data)
-    return data
+    return _serve(
+        _flood_cache, (round(lat, 2), round(lon, 2)), lambda: _fetch_flood(lat, lon), "flood"
+    )
 
 
 # --- Cyclone indicator (forecast wind + surface pressure, Open-Meteo) --------
@@ -285,14 +304,9 @@ def _fetch_cyclone(lat: float, lon: float) -> dict:
 
 
 def get_cyclone_forecast(lat: float, lon: float) -> dict:
-    key = (round(lat, 2), round(lon, 2))
-    now = time.monotonic()
-    hit = _cyclone_cache.get(key)
-    if hit is not None and now - hit[0] < _CACHE_TTL_S:
-        return hit[1]
-    data = _fetch_cyclone(lat, lon)
-    _cyclone_cache[key] = (now, data)
-    return data
+    return _serve(
+        _cyclone_cache, (round(lat, 2), round(lon, 2)), lambda: _fetch_cyclone(lat, lon), "cyclone"
+    )
 
 
 # --- Landslide indicator (slope from a 90 m DEM × rainfall trigger) ---------
@@ -426,11 +440,32 @@ def _fetch_landslide(lat: float, lon: float) -> dict:
 
 
 def get_landslide_forecast(lat: float, lon: float) -> dict:
-    key = (round(lat, 2), round(lon, 2))
-    now = time.monotonic()
-    hit = _landslide_cache.get(key)
-    if hit is not None and now - hit[0] < _CACHE_TTL_S:
-        return hit[1]
-    data = _fetch_landslide(lat, lon)
-    _landslide_cache[key] = (now, data)
-    return data
+    return _serve(
+        _landslide_cache,
+        (round(lat, 2), round(lon, 2)),
+        lambda: _fetch_landslide(lat, lon),
+        "landslide",
+    )
+
+
+def warm_up() -> None:
+    """Pre-fetch all four forecasts for the configured demo coordinates so
+    the citizen home cards are live on the very first page load — before
+    Open-Meteo latency or a cold free-tier dyno can bite. Best-effort."""
+    from app.config import settings
+
+    lat, lon = settings.DEMO_LAT, settings.DEMO_LON
+    if lat is None or lon is None:
+        logger.info("weather warm-up: DEMO_LAT/DEMO_LON unset — skipping")
+        return
+    for label, fn in (
+        ("rainfall", get_rainfall_forecast),
+        ("flood", get_flood_forecast),
+        ("cyclone", get_cyclone_forecast),
+        ("landslide", get_landslide_forecast),
+    ):
+        try:
+            fn(lat, lon)
+            logger.info("weather warm-up: %s cached for %.4f,%.4f", label, lat, lon)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("weather warm-up: %s failed: %s", label, exc)

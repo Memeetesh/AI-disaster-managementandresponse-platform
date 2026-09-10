@@ -139,7 +139,7 @@ export default function EmergencyPage() {
       hospital,
     })
       .then(() =>
-        addToast("Saved. Open drishti-offline-map.html anytime — no internet needed.", "success")
+        addToast("Saved. Open aasha-setu-offline-map.html anytime — no internet needed.", "success")
       )
       .catch(() => addToast("Could not build the offline map. Try again with a connection.", "error"))
       .finally(() => setBuildingMap(false));

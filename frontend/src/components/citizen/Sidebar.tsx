@@ -38,7 +38,7 @@ export function Sidebar({ onClose, isMobile }: SidebarProps) {
               </svg>
             </div>
             <div>
-              <h1 className="text-lg font-bold tracking-tight leading-tight">DRISHTI</h1>
+              <h1 className="text-lg font-bold tracking-tight leading-tight">Aasha Setu</h1>
               <p className="text-[11px] text-navy-300 leading-tight">Disaster Intelligence &amp; Response</p>
             </div>
           </div>

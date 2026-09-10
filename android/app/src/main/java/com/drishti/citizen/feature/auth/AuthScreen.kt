@@ -65,7 +65,7 @@ fun AuthScreen(viewModel: AuthViewModel = hiltViewModel()) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = "DRISHTI",
+                text = "Aasha Setu",
                 style = MaterialTheme.typography.headlineMedium,
                 color = Color.White,
             )

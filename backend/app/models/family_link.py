@@ -9,7 +9,7 @@ from app.database import Base
 class FamilyLink(Base):
     """A person a citizen added to their family safety circle, by phone.
 
-    If that phone belongs to a registered DRISHTI user, `member_user_id` is
+    If that phone belongs to a registered Aasha Setu user, `member_user_id` is
     set and `status` starts as "pending" — that user must accept the link
     before the owner sees any live status or location. A phone that isn't a
     registered user is stored as "accepted" straight away (nothing to

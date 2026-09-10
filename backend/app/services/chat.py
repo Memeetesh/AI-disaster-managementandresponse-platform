@@ -12,7 +12,7 @@ import httpx
 
 from app.config import settings
 
-logger = logging.getLogger("drishti.chat")
+logger = logging.getLogger("aasha_setu.chat")
 
 _TIMEOUT_S = 30.0
 _MAX_HISTORY = 16
@@ -22,7 +22,7 @@ _MAX_HISTORY = 16
 _MAX_OUTPUT_TOKENS = 1500
 
 SUPPORT_SYSTEM_PROMPT = """\
-You are "Saathi", a calm, caring support companion inside the DRISHTI disaster \
+You are "Saathi", a calm, caring support companion inside the Aasha Setu disaster \
 app. You are talking with someone who may be affected by or recovering from a \
 disaster (often flooding) in India.
 

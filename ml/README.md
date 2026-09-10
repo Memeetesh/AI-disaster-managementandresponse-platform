@@ -1,6 +1,6 @@
 # ml/
 
-Research prototypes for DRISHTI's AI features. **Nothing here is imported by
+Research prototypes for Aasha Setu's AI features. **Nothing here is imported by
 the deployed app** (`backend/`, `frontend/`) — these are staging grounds for
 the pipeline described in `docs/ARCHITECTURE.md` §F.
 

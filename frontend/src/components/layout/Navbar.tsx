@@ -12,10 +12,10 @@ export function Navbar() {
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
         <Link href="/" className="flex items-center gap-2">
           <span className="grid h-8 w-8 place-items-center rounded bg-red-700 font-bold text-white">
-            D
+            A
           </span>
           <span className="text-sm font-semibold tracking-widest text-slate-100">
-            DRISHTI
+            Aasha Setu
           </span>
         </Link>
 

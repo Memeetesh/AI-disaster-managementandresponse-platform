@@ -1,7 +1,7 @@
 """Family safety circle.
 
 A citizen saves people by phone number. If a saved phone belongs to a
-registered DRISHTI user, the link starts as **pending** — that user must
+registered Aasha Setu user, the link starts as **pending** — that user must
 accept it before the owner sees anything. Once accepted, the owner sees the
 member's live safety status (from their check-ins / active SOS) and, if the
 member has separately turned on location sharing, their last known point.
@@ -46,7 +46,7 @@ _ACTIVE_INCIDENT_STATUSES = (
 )
 
 _STATUS_LABELS = {
-    "not_registered": "Not on DRISHTI",
+    "not_registered": "Not on Aasha Setu",
     "invite_pending": "Invite pending",
     "invite_declined": "Invite declined",
     "in_emergency": "In emergency",

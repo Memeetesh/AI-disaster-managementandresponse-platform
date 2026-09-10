@@ -9,7 +9,7 @@ import httpx
 
 from app.config import settings
 
-logger = logging.getLogger("drishti.routing")
+logger = logging.getLogger("aasha_setu.routing")
 
 _AVG_SPEED_KMH = 28.0  # rough urban-flood response speed for the fallback ETA
 _OSRM_TIMEOUT_S = 2.0

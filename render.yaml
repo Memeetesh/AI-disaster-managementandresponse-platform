@@ -1,11 +1,11 @@
-# Render Blueprint for the DRISHTI backend (FastAPI + SSE).
+# Render Blueprint for the Aasha Setu backend (FastAPI + SSE).
 # The frontend deploys separately on Vercel; the database is Supabase (PostGIS).
 #
 # In the Render dashboard, set the `sync: false` vars after the first deploy:
 #   DATABASE_URL   - Supabase "Connection string" (Transaction pooler is fine);
 #                    a bare postgres:// URL is auto-rewritten by app/config.py
 #   CORS_ORIGINS   - your Vercel URL(s), comma-separated, e.g.
-#                    https://drishti.vercel.app,https://drishti-git-main-you.vercel.app
+#                    https://aasha-setu.vercel.app,https://aasha-setu-git-main-you.vercel.app
 #   LLM_API_KEY    - your Gemini API key (optional; chat falls back without it)
 services:
   - type: web

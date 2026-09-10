@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import threading
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
@@ -10,14 +11,20 @@ from fastapi.staticfiles import StaticFiles
 from app import keepalive
 from app.api.router import api_router
 from app.config import settings
+from app.services import weather as weather_service
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("drishti")
+logger = logging.getLogger("aasha_setu")
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     keepalive_task = keepalive.start()
+    # Pre-fill the weather cache off the request path (best-effort; no-op
+    # unless DEMO_LAT/DEMO_LON are set).
+    threading.Thread(
+        target=weather_service.warm_up, name="weather-warmup", daemon=True
+    ).start()
     try:
         yield
     finally:

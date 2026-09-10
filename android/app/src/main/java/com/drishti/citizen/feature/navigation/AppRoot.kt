@@ -47,7 +47,7 @@ fun AppRoot(
         topBar = {
             Column {
                 CenterAlignedTopAppBar(
-                    title = { Text(currentTab?.label ?: "DRISHTI") },
+                    title = { Text(currentTab?.label ?: "Aasha Setu") },
                     navigationIcon = {
                         if (currentTab == null && navController.previousBackStackEntry != null) {
                             IconButton(onClick = { navController.popBackStack() }) {

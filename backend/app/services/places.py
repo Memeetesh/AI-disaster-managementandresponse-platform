@@ -14,7 +14,7 @@ import time
 
 import httpx
 
-logger = logging.getLogger("drishti.places")
+logger = logging.getLogger("aasha_setu.places")
 
 _OVERPASS_MIRRORS = (
     "https://overpass-api.de/api/interpreter",
@@ -24,7 +24,7 @@ _OVERPASS_MIRRORS = (
 # Overpass's frontend 406s some of httpx's default headers (Accept-Encoding
 # with br/zstd); send conservative ones + a meaningful UA per OSM policy.
 _HEADERS = {
-    "User-Agent": "DRISHTI/1.0 (disaster-response demo; +https://github.com/Memeetesh)",
+    "User-Agent": "AashaSetu/1.0 (disaster-response demo; +https://github.com/Memeetesh)",
     "Accept": "application/json",
     "Accept-Encoding": "gzip",
 }

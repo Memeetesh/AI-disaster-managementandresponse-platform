@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "DRISHTI — Disaster Intelligence & Response",
+  title: "Aasha Setu — Disaster Intelligence & Response",
   description:
     "AI-powered disaster intelligence, response coordination, and situational awareness system.",
   manifest: "/manifest.webmanifest",

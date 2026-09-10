@@ -1,4 +1,4 @@
-# DRISHTI — Native Android App Implementation Plan
+# Aasha Setu — Native Android App Implementation Plan
 
 A native Android client that replicates the **citizen website** — the
 `frontend/src/app/(citizen)` route group of the Next.js PWA — screen for
@@ -9,7 +9,7 @@ out of scope; self-registration only ever mints a `citizen` account
 
 > Scope note: if "Citizen" here means the US public-safety app
 > (citizen.com) rather than our own citizen UI, the feature set still maps
-> onto what DRISHTI already exposes (live incident map, area alerts, SOS,
+> onto what Aasha Setu already exposes (live incident map, area alerts, SOS,
 > safety check-ins). This plan targets **our** citizen UI + API; deviations
 > for the other reading are called out inline as *"Citizen.com parity"*.
 

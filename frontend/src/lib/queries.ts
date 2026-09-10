@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
@@ -242,11 +243,14 @@ export function useRainfallForecast(lat: number | null, lon: number | null) {
     queryKey: queryKeys.rainfall(lat ?? undefined, lon ?? undefined),
     queryFn: () => getRainfallForecast(lat as number, lon as number, token as string),
     enabled: !!token && lat !== null && lon !== null,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 60 * 1000,
     refetchInterval: 15 * 60 * 1000,
     refetchOnWindowFocus: true,
-    retry: 3,
-    retryDelay: (n) => Math.min(1500 * 2 ** n, 8000),
+    retry: 4,
+    retryDelay: (n) => Math.min(1500 * 2 ** n, 10000),
+    // Once a card has a real value, keep showing it — a later failed
+    // refetch must never revert it to the demo placeholder.
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -257,11 +261,14 @@ export function useFloodForecast(lat: number | null, lon: number | null) {
     queryKey: queryKeys.flood(lat ?? undefined, lon ?? undefined),
     queryFn: () => getFloodForecast(lat as number, lon as number, token as string),
     enabled: !!token && lat !== null && lon !== null,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 60 * 1000,
     refetchInterval: 15 * 60 * 1000,
     refetchOnWindowFocus: true,
-    retry: 3,
-    retryDelay: (n) => Math.min(1500 * 2 ** n, 8000),
+    retry: 4,
+    retryDelay: (n) => Math.min(1500 * 2 ** n, 10000),
+    // Once a card has a real value, keep showing it — a later failed
+    // refetch must never revert it to the demo placeholder.
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -272,11 +279,14 @@ export function useCycloneForecast(lat: number | null, lon: number | null) {
     queryKey: queryKeys.cyclone(lat ?? undefined, lon ?? undefined),
     queryFn: () => getCycloneForecast(lat as number, lon as number, token as string),
     enabled: !!token && lat !== null && lon !== null,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 60 * 1000,
     refetchInterval: 15 * 60 * 1000,
     refetchOnWindowFocus: true,
-    retry: 3,
-    retryDelay: (n) => Math.min(1500 * 2 ** n, 8000),
+    retry: 4,
+    retryDelay: (n) => Math.min(1500 * 2 ** n, 10000),
+    // Once a card has a real value, keep showing it — a later failed
+    // refetch must never revert it to the demo placeholder.
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -287,11 +297,14 @@ export function useLandslideForecast(lat: number | null, lon: number | null) {
     queryKey: queryKeys.landslide(lat ?? undefined, lon ?? undefined),
     queryFn: () => getLandslideForecast(lat as number, lon as number, token as string),
     enabled: !!token && lat !== null && lon !== null,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 60 * 1000,
     refetchInterval: 15 * 60 * 1000,
     refetchOnWindowFocus: true,
-    retry: 3,
-    retryDelay: (n) => Math.min(1500 * 2 ** n, 8000),
+    retry: 4,
+    retryDelay: (n) => Math.min(1500 * 2 ** n, 10000),
+    // Once a card has a real value, keep showing it — a later failed
+    // refetch must never revert it to the demo placeholder.
+    placeholderData: keepPreviousData,
   });
 }
 
