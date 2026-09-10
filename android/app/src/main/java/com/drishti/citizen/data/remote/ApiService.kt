@@ -26,6 +26,7 @@ import com.drishti.citizen.data.remote.dto.RiskMapResponseDto
 import com.drishti.citizen.data.remote.dto.UserDto
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
+import okhttp3.ResponseBody
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -130,9 +131,13 @@ interface ApiService {
     @POST("check-in")
     suspend fun createCheckIn(@Body body: CheckInRequest): CheckInDto
 
-    /** Null when the caller has never checked in. */
+    /**
+     * Raw body because the endpoint returns the literal `null` when the
+     * caller has never checked in, which the serialization converter can't
+     * decode into `CheckInDto`. Parsed in `CheckInRepository`.
+     */
     @GET("check-in/me")
-    suspend fun myCheckIn(): CheckInDto?
+    suspend fun myCheckIn(): ResponseBody
 
     // --- family (Phase 5) ---
 

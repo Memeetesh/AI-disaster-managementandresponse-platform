@@ -102,6 +102,8 @@ interface RiskMapProps {
   responders?: Responder[];
   rescueOps?: RescueOperation[];
   onZoneClick?: (properties: RiskZoneProperties) => void;
+  /** `[lng, lat]` to pan/zoom the map to (e.g. a new SOS). Changing it re-triggers the fly. */
+  focus?: [number, number] | null;
 }
 
 export function RiskMap({
@@ -112,6 +114,7 @@ export function RiskMap({
   responders,
   rescueOps,
   onZoneClick,
+  focus,
 }: RiskMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -362,6 +365,15 @@ export function RiskMap({
     const source = mapRef.current.getSource("rescue-routes") as GeoJSONSource | undefined;
     source?.setData(rescueOps ? routesToGeoJSON(rescueOps) : EMPTY_FC);
   }, [loaded, rescueOps]);
+
+  useEffect(() => {
+    if (!loaded || !mapRef.current || !focus) return;
+    mapRef.current.flyTo({
+      center: focus,
+      zoom: Math.max(mapRef.current.getZoom(), 14),
+      speed: 1.4,
+    });
+  }, [loaded, focus]);
 
   return <div ref={containerRef} className={className ?? "h-full w-full"} />;
 }

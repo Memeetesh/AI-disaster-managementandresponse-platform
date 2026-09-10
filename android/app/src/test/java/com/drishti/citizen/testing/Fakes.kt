@@ -71,7 +71,7 @@ open class FakeApiService : ApiService {
         description: okhttp3.RequestBody?,
     ): IncidentDto = error("not stubbed")
     override suspend fun createCheckIn(body: CheckInRequest): CheckInDto = error("not stubbed")
-    override suspend fun myCheckIn(): CheckInDto? = error("not stubbed")
+    override suspend fun myCheckIn(): okhttp3.ResponseBody = error("not stubbed")
     override suspend fun family(lat: Double?, lon: Double?): List<FamilyMemberDto> = error("not stubbed")
     override suspend fun addFamilyMember(body: AddFamilyMemberRequest): FamilyMemberDto = error("not stubbed")
     override suspend fun removeFamilyMember(id: Int) = error("not stubbed")

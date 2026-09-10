@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
@@ -54,6 +54,8 @@ export default function DashboardPage() {
   const { connected } = useRealtimeStatus();
 
   const [selectedZone, setSelectedZone] = useState<RiskZoneProperties | null>(null);
+  const [mapFocus, setMapFocus] = useState<[number, number] | null>(null);
+  const seenIncidentIds = useRef<Set<number>>(new Set());
 
   const incidentsQuery = useIncidents({ sort: "priority" });
   const riskMapQuery = useRiskMap();
@@ -64,7 +66,7 @@ export default function DashboardPage() {
   const updateIncident = useUpdateIncident();
   const dispatch = useDispatch();
 
-  const incidents = incidentsQuery.data ?? [];
+  const incidents = useMemo(() => incidentsQuery.data ?? [], [incidentsQuery.data]);
   const riskMap = riskMapQuery.data;
   const shelters = sheltersQuery.data ?? [];
   const responders = respondersQuery.data ?? [];
@@ -80,6 +82,18 @@ export default function DashboardPage() {
       router.replace("/");
     }
   }, [loading, user, router]);
+
+  // Pan the map to a genuinely new incident (e.g. an SOS from the app).
+  useEffect(() => {
+    if (incidents.length === 0) return;
+    const known = seenIncidentIds.current;
+    const firstLoad = known.size === 0;
+    const fresh = incidents.filter((i) => !known.has(i.id));
+    incidents.forEach((i) => known.add(i.id));
+    if (firstLoad || fresh.length === 0) return;
+    const newest = fresh.reduce((a, b) => (b.id > a.id ? b : a));
+    setMapFocus([newest.longitude, newest.latitude]);
+  }, [incidents]);
 
   function refresh() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.incidents() });
@@ -136,6 +150,7 @@ export default function DashboardPage() {
             responders={responders}
             rescueOps={rescueOps}
             onZoneClick={setSelectedZone}
+            focus={mapFocus}
           />
 
           <div className="absolute left-3 top-3 rounded bg-slate-950/90 px-3 py-2 text-xs ring-1 ring-slate-800">
@@ -259,10 +274,16 @@ export default function DashboardPage() {
                       <Badge tone={SEVERITY_TONE[incident.severity]}>{incident.severity}</Badge>
                     </div>
                   </div>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {incident.people_affected} affected · {incident.latitude.toFixed(4)},{" "}
-                    {incident.longitude.toFixed(4)} · {new Date(incident.created_at).toLocaleTimeString()}
-                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setMapFocus([incident.longitude, incident.latitude])}
+                    className="mt-1 block text-left text-xs text-slate-500 hover:text-slate-300"
+                    title="Show on map"
+                  >
+                    {incident.people_affected} affected · {incident.latitude.toFixed(5)},{" "}
+                    {incident.longitude.toFixed(5)} · {new Date(incident.created_at).toLocaleTimeString()} ·{" "}
+                    <span className="underline">show on map</span>
+                  </button>
                   {incident.description && (
                     <p className="mt-1 text-sm text-slate-300">{incident.description}</p>
                   )}

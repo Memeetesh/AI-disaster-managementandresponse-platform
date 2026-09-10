@@ -106,6 +106,13 @@ fun EmergencyScreen(viewModel: EmergencyViewModel = hiltViewModel()) {
                     ),
                 )
             }) { Text("Share location for emergency help") }
+        } else if (!state.preciseLocation) {
+            Text(
+                "Only approximate location is on — your SOS point could be off by a kilometre. " +
+                    "Turn on precise location in Settings for an accurate SOS.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Warn600,
+            )
         }
 
         SosButton(

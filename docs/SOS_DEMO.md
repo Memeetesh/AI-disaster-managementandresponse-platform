@@ -61,14 +61,24 @@ cd android
   isn't a `10.0.2.2` / `localhost` host.)
 - In the app: **Register** a new citizen (any name / phone / 8+ char password),
   or sign in as `9000000000` / `drishtidemo`.
+- When prompted for location, grant **Precise** (not "Approximate"). The SOS
+  screen warns if only approximate is on — an SOS point could then be off by a
+  kilometre. Being outdoors / near a window gives the best GPS fix.
 
 ## 4. Run the demo
 
 1. On the phone: **SOS** tab → press and **hold the SOS button for 3 seconds**.
+   The app pulls a fresh high-accuracy GPS fix during the hold, so the SOS
+   carries where you are *right now*, not where the screen opened.
 2. Dialog shows "SOS sent" with the incident number.
-3. On the dashboard: a new **CRITICAL** incident appears at the top of the
-   Incidents list within a second — no refresh. `reported_by` is the phone's
-   citizen user; `priority` is `critical`.
+3. On the dashboard:
+   - A new **CRITICAL** incident appears at the top of the Incidents list within
+     a second — no refresh. `reported_by` is the phone's citizen user;
+     `priority` is `critical`.
+   - The **map flies to the SOS location** and drops a dark-red incident dot.
+     Click the dot for a popup (`#id · type · severity · status`); click
+     **"show on map"** on any incident row to re-centre on it.
+   - The incident row shows the exact `lat, lon` (5 decimals ≈ 1 m).
 4. Optional: on the dashboard, verify/patch the incident → its status flips
    live in the phone's **My Reports** tab (Phase 3 + 7).
 

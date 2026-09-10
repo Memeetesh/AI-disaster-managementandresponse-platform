@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 sealed interface SosStage {
@@ -42,6 +43,8 @@ sealed interface SosStage {
 
 data class EmergencyUiState(
     val location: LocationUiState = LocationUiState.Locating,
+    /** false = only "approximate" location granted; an SOS point could be off by a km+. */
+    val preciseLocation: Boolean = true,
     val sos: SosStage = SosStage.Idle,
     val nearestHospital: NearbyPlaceDto? = null,
     val nearestRescue: NearbyShelterDto? = null,
@@ -65,6 +68,11 @@ class EmergencyViewModel @Inject constructor(
     val state: StateFlow<EmergencyUiState> = _state.asStateFlow()
 
     private var holdJob: Job? = null
+    private var prewarmJob: Job? = null
+
+    /** A fresh high-accuracy fix acquired while the button is held. */
+    @Volatile
+    private var prewarmedFix: LatLon? = null
 
     init {
         resolveLocationAndLoad()
@@ -74,11 +82,15 @@ class EmergencyViewModel @Inject constructor(
 
     private fun resolveLocationAndLoad() {
         if (!locationProvider.hasPermission()) {
-            _state.update { it.copy(location = LocationUiState.PermissionNeeded, placesLoading = false) }
+            _state.update {
+                it.copy(location = LocationUiState.PermissionNeeded, placesLoading = false, preciseLocation = false)
+            }
             loadCheckIn()
             return
         }
-        _state.update { it.copy(location = LocationUiState.Locating) }
+        _state.update {
+            it.copy(location = LocationUiState.Locating, preciseLocation = locationProvider.hasPreciseLocation())
+        }
         viewModelScope.launch {
             val fix = locationProvider.currentFix()
             _state.update {
@@ -120,6 +132,14 @@ class EmergencyViewModel @Inject constructor(
         if (s.location !is LocationUiState.Ready) return
         if (s.sos is SosStage.Holding || s.sos is SosStage.Submitting || s.sos is SosStage.Sent) return
 
+        // Start pulling a fresh, precise fix now so it's ready by the time the
+        // 3s hold completes — the SOS should carry where you are *now*.
+        prewarmedFix = null
+        prewarmJob?.cancel()
+        prewarmJob = viewModelScope.launch {
+            prewarmedFix = locationProvider.emergencyFix()
+        }
+
         holdJob?.cancel()
         holdJob = viewModelScope.launch {
             var elapsed = 0L
@@ -137,6 +157,8 @@ class EmergencyViewModel @Inject constructor(
     fun cancelHold() {
         holdJob?.cancel()
         holdJob = null
+        prewarmJob?.cancel()
+        prewarmJob = null
         if (_state.value.sos is SosStage.Holding) {
             _state.update { it.copy(sos = SosStage.Idle) }
         }
@@ -147,9 +169,13 @@ class EmergencyViewModel @Inject constructor(
     }
 
     private fun submitSos() {
-        val fix = (_state.value.location as? LocationUiState.Ready)?.at ?: return
+        val screenFix = (_state.value.location as? LocationUiState.Ready)?.at ?: return
         _state.update { it.copy(sos = SosStage.Submitting) }
         viewModelScope.launch {
+            // Give the fix warmed during the hold a short grace period to land,
+            // then use it if we got one, else the fix the screen already had.
+            withTimeoutOrNull(SUBMIT_FIX_WAIT_MS) { prewarmJob?.join() }
+            val fix = prewarmedFix ?: screenFix
             try {
                 val incident = incidentsRepository.submitSos(
                     latitude = fix.lat,
@@ -201,11 +227,13 @@ class EmergencyViewModel @Inject constructor(
 
     override fun onCleared() {
         holdJob?.cancel()
+        prewarmJob?.cancel()
     }
 
     private companion object {
         const val HOLD_DURATION_MS = 3_000L
         const val HOLD_STEP_MS = 50L
+        const val SUBMIT_FIX_WAIT_MS = 5_000L
         const val SOS_DESCRIPTION = "Emergency SOS sent from the DRISHTI app."
     }
 }
