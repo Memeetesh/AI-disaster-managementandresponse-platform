@@ -7,6 +7,11 @@ prompts Gemini (`gemini-2.5-flash`, `GEMINI_API_KEY` env var) for a
 structured `{risk_level, headline, actionable_warnings}` JSON response,
 exposed at `POST /api/v1/analyze-location`.
 
+> Note: `gemini-2.5-flash` on the `v1beta` endpoint now 404s for new keys.
+> The backend chat service (`backend/app/services/chat.py`) uses
+> `gemini-3.6-flash` on `/v1/` with an `x-goog-api-key` header — copy that
+> setup if you revive this prototype.
+
 **Incomplete as committed** — `runAIAgent` calls `fetchWeather`,
 `fetchFlood`, and `fetchSeismic`, but none of the three are defined in this
 file (the comment above them says "keep the existing ... functions here",

@@ -18,6 +18,15 @@ frontend/.next/
 frontend/out/
 frontend/next-env.d.ts.bak
 
+# ML — model weights (ultralytics re-downloads) and sample media: keep local
+ml/computer_vision/weights/
+ml/computer_vision/samples/
+ml/**/.venv/
+*.pt
+
+# Python bytecode (anywhere)
+__pycache__/
+
 # OS / editor
 .DS_Store
 *.swp
