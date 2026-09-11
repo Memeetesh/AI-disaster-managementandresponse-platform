@@ -23,8 +23,16 @@ import type {
 const DEFAULT_CENTER: [number, number] = [80.2707, 13.0827];
 const DEFAULT_ZOOM = 11;
 
+// CARTO's free basemap tiles, not tile.openstreetmap.org — OSM's raw tile
+// server actively blocks apps like this one under its Tile Usage Policy
+// (https://operations.osmfoundation.org/policies/tiles/): it returns HTTP
+// 200 with an `image/png` content-type but an empty/unreadable body, which
+// MapLibre reports as "the source image could not be decoded". CARTO's
+// tiles are still OSM-sourced data, just served from an endpoint meant for
+// exactly this kind of embedding, with permissive CORS.
 const TILE_URL =
-  process.env.NEXT_PUBLIC_MAP_TILE_URL ?? "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+  process.env.NEXT_PUBLIC_MAP_TILE_URL ??
+  "https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png";
 
 const RISK_COLORS: Record<string, string> = {
   low: "#16a34a",
@@ -174,7 +182,8 @@ export function RiskMap({
             type: "raster",
             tiles: [TILE_URL],
             tileSize: 256,
-            attribution: "&copy; OpenStreetMap contributors",
+            attribution:
+              '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
           },
         },
         layers: [{ id: "osm", type: "raster", source: "osm" }],
