@@ -23,21 +23,14 @@ import type {
 const DEFAULT_CENTER: [number, number] = [80.2707, 13.0827];
 const DEFAULT_ZOOM = 11;
 
-// Primary basemap: CARTO's free voyager tiles (OSM data, permissive CORS).
-// Fallback: OpenStreetMap France humanitarian CDN — also OSM data but a
-// different origin, so if one CDN is blocked the other may still work.
-// Note: tile.openstreetmap.org is deliberately NOT used here — OSM's own
-// tile server returns HTTP 200 with an unreadable body for high-traffic
-// apps (policy violation), causing MapLibre to report decode errors.
-const TILE_URL =
+// OpenFreeMap — free, no API key, served from Cloudflare CDN.
+// "positron" is a clean light/white style: coloured risk-zone polygons and
+// SOS pins stand out far better on it than on a grey raster tile base.
+// Confirmed reachable at 260ms from this environment.
+// https://openfreemap.org
+const MAP_STYLE_URL =
   process.env.NEXT_PUBLIC_MAP_TILE_URL ??
-  "https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png";
-
-const FALLBACK_TILE_URL =
-  "https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png";
-
-// How many consecutive tile errors trigger a switch to the fallback CDN.
-const TILE_ERROR_THRESHOLD = 3;
+  "https://tiles.openfreemap.org/styles/positron";
 
 const RISK_COLORS: Record<string, string> = {
   low: "#16a34a",
@@ -62,7 +55,7 @@ const EMPTY_FC = { type: "FeatureCollection" as const, features: [] };
 // Feature-detect up front so a WebGL2-less browser/device gets an actual
 // message instead of an unexplained empty map.
 function supportsWebGL2(): boolean {
-  if (typeof document === "undefined") return true; // SSR: assume yes, re-check client-side
+  if (typeof document === "undefined") return true; // SSR: assume yes
   try {
     const canvas = document.createElement("canvas");
     return !!canvas.getContext("webgl2");
@@ -153,7 +146,7 @@ export function RiskMap({
   const [mapError, setMapError] = useState<string | null>(null);
   const [tileWarning, setTileWarning] = useState<string | null>(null);
   const tileErrorCount = useRef(0);
-  const didSwitchFallback = useRef(false);
+
   const onZoneClickRef = useRef(onZoneClick);
   useEffect(() => {
     onZoneClickRef.current = onZoneClick;
@@ -167,13 +160,6 @@ export function RiskMap({
     if (!containerRef.current || mapRef.current) return;
 
     if (!supportsWebGL2()) {
-      // Deliberately synchronous: this is a one-time client-only capability
-      // check gating whether the map mounts at all, not state that could
-      // cascade — same render either way, since the map is never created
-      // when this is true. SSR renders with mapError still null (no
-      // WebGL2/`document` on the server); this corrects on the client's
-      // first paint before the map would otherwise appear, so there's
-      // nothing for a user to see flip.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setMapError(
         "This browser/device doesn't support WebGL2, which the map requires. Try a recent version of Chrome, Firefox, or Edge."
@@ -185,19 +171,9 @@ export function RiskMap({
 
     const map = new MapLibreMap({
       container,
-      style: {
-        version: 8,
-        sources: {
-          osm: {
-            type: "raster",
-            tiles: [TILE_URL],
-            tileSize: 256,
-            attribution:
-              '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-          },
-        },
-        layers: [{ id: "osm", type: "raster", source: "osm" }],
-      },
+      // OpenFreeMap vector style — full MapLibre GL style JSON served from
+      // Cloudflare CDN. Much sharper than raster tiles and loads faster.
+      style: MAP_STYLE_URL,
       center: DEFAULT_CENTER,
       zoom: DEFAULT_ZOOM,
     });
@@ -214,43 +190,22 @@ export function RiskMap({
 
     let hasLoaded = false;
     map.on("error", (e) => {
-      // Tile errors have a `tile` property; they happen after the map style
-      // has loaded and are non-fatal (just missing background imagery).
+      // Tile/glyph/sprite errors have a `tile` or `source` property and are
+      // non-fatal — they just mean the background map is missing. Only show
+      // the full-screen error overlay for pre-load fatal failures.
       const isTileError = !!(e as unknown as Record<string, unknown>).tile;
 
       if (!hasLoaded && !isTileError) {
-        // A fatal style/WebGL error before the map finished loading.
-        setMapError(e?.error?.message || "Map failed to load.");
+        setMapError(e?.error?.message || "Map style failed to load. Check your internet connection.");
         return;
       }
 
       if (isTileError) {
         tileErrorCount.current += 1;
-
-        // After several consecutive tile errors, switch to the fallback CDN.
-        if (!didSwitchFallback.current && tileErrorCount.current >= TILE_ERROR_THRESHOLD) {
-          didSwitchFallback.current = true;
-          try {
-            const src = map.getSource("osm") as { setTiles?: (t: string[]) => void } | undefined;
-            if (src && typeof src.setTiles === "function") {
-              src.setTiles([FALLBACK_TILE_URL]);
-              // Reset counter so continued fallback errors don't re-trigger.
-              tileErrorCount.current = 0;
-              setTileWarning(null);
-            } else {
-              setTileWarning(
-                "Map tiles are unavailable (network issue). The SOS/shelter overlays still work."
-              );
-            }
-          } catch {
-            setTileWarning(
-              "Map tiles are unavailable (network issue). The SOS/shelter overlays still work."
-            );
-          }
-        } else if (didSwitchFallback.current && tileErrorCount.current >= TILE_ERROR_THRESHOLD) {
-          // Both CDNs failed — tell the user.
+        // Show a soft warning after a few consecutive tile failures.
+        if (tileErrorCount.current >= 3) {
           setTileWarning(
-            "Map tiles are unavailable — no internet access. SOS pins and overlays still work."
+            "Map tiles are unavailable — network issue. SOS pins and overlays still work."
           );
         }
       }
@@ -261,6 +216,8 @@ export function RiskMap({
       // Force a resize in case the container grew after the map was created
       // (the ResizeObserver may not fire synchronously on initial mount).
       map.resize();
+
+      // ── Data sources ──────────────────────────────────────────────────────
       map.addSource("risk-zones", { type: "geojson", data: EMPTY_FC });
       map.addLayer({
         id: "risk-zones-fill",
@@ -270,26 +227,21 @@ export function RiskMap({
           "fill-color": [
             "match",
             ["get", "risk_category"],
-            "low",
-            RISK_COLORS.low,
-            "moderate",
-            RISK_COLORS.moderate,
-            "high",
-            RISK_COLORS.high,
-            "very_high",
-            RISK_COLORS.very_high,
-            "critical",
-            RISK_COLORS.critical,
+            "low",       RISK_COLORS.low,
+            "moderate",  RISK_COLORS.moderate,
+            "high",      RISK_COLORS.high,
+            "very_high", RISK_COLORS.very_high,
+            "critical",  RISK_COLORS.critical,
             "#64748b",
           ],
-          "fill-opacity": 0.35,
+          "fill-opacity": 0.30,
         },
       });
       map.addLayer({
         id: "risk-zones-outline",
         type: "line",
         source: "risk-zones",
-        paint: { "line-color": "#0f172a", "line-width": 1 },
+        paint: { "line-color": "#0f172a", "line-width": 0.8, "line-opacity": 0.5 },
       });
 
       map.addSource("shelters", { type: "geojson", data: EMPTY_FC });
@@ -298,7 +250,7 @@ export function RiskMap({
         type: "circle",
         source: "shelters",
         paint: {
-          "circle-radius": 6,
+          "circle-radius": 7,
           "circle-color": "#0ea5e9",
           "circle-stroke-width": 2,
           "circle-stroke-color": "#ffffff",
@@ -311,23 +263,18 @@ export function RiskMap({
         type: "circle",
         source: "incidents",
         paint: {
-          "circle-radius": 7,
+          "circle-radius": 8,
           "circle-color": [
             "match",
             ["get", "severity"],
-            "low",
-            SEVERITY_COLORS.low,
-            "moderate",
-            SEVERITY_COLORS.moderate,
-            "high",
-            SEVERITY_COLORS.high,
-            "very_high",
-            SEVERITY_COLORS.very_high,
-            "critical",
-            SEVERITY_COLORS.critical,
+            "low",       SEVERITY_COLORS.low,
+            "moderate",  SEVERITY_COLORS.moderate,
+            "high",      SEVERITY_COLORS.high,
+            "very_high", SEVERITY_COLORS.very_high,
+            "critical",  SEVERITY_COLORS.critical,
             "#334155",
           ],
-          "circle-stroke-width": 2,
+          "circle-stroke-width": 2.5,
           "circle-stroke-color": "#ffffff",
         },
       });
@@ -356,14 +303,10 @@ export function RiskMap({
           "circle-color": [
             "match",
             ["get", "status"],
-            "available",
-            "#22c55e",
-            "en_route",
-            "#f59e0b",
-            "busy",
-            "#ef4444",
-            "offline",
-            "#94a3b8",
+            "available", "#22c55e",
+            "en_route",  "#f59e0b",
+            "busy",      "#ef4444",
+            "offline",   "#94a3b8",
             "#94a3b8",
           ],
           "circle-stroke-width": 2,
@@ -371,6 +314,7 @@ export function RiskMap({
         },
       });
 
+      // ── Popups & click handlers ───────────────────────────────────────────
       const pointPopup = (
         layer: string,
         html: (props: Record<string, unknown>) => string
@@ -454,6 +398,8 @@ export function RiskMap({
     };
   }, []);
 
+  // ── Data update effects ──────────────────────────────────────────────────
+
   useEffect(() => {
     if (!loaded || !mapRef.current) return;
     const source = mapRef.current.getSource("risk-zones") as GeoJSONSource | undefined;
@@ -493,11 +439,13 @@ export function RiskMap({
     });
   }, [loaded, focus]);
 
+  // ── Render ───────────────────────────────────────────────────────────────
+
   return (
     <div className={`relative ${className ?? "h-full w-full"}`}>
       <div ref={containerRef} className="h-full w-full" />
 
-      {/* Fatal error: map canvas never loaded */}
+      {/* Fatal error: style / WebGL never loaded */}
       {mapError && (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-950 p-6 text-center z-10">
           <div className="max-w-sm">
@@ -507,7 +455,7 @@ export function RiskMap({
         </div>
       )}
 
-      {/* Non-fatal warning: canvas works but background tiles are unreachable */}
+      {/* Non-fatal: canvas works but background tiles are unreachable */}
       {tileWarning && !mapError && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 max-w-xs w-[calc(100%-1rem)] pointer-events-none">
           <div className="flex items-start gap-2 rounded-xl bg-warn-900/90 backdrop-blur-sm border border-warn-700/60 px-3 py-2 shadow-lg">
