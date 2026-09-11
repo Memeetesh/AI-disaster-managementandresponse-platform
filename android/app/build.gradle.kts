@@ -34,7 +34,10 @@ android {
             dimension = "env"
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
-            buildConfigField("String", "BASE_URL", "\"http://10.149.121.80:8000/api/v1/\"")
+            // USB-tethered via `adb reverse tcp:8000 tcp:8000` — sidesteps Wi-Fi entirely
+            // (client isolation / network mismatches). Swap back to a LAN IP once you
+            // have a Wi-Fi network confirmed to allow device-to-device traffic.
+            buildConfigField("String", "BASE_URL", "\"http://127.0.0.1:8000/api/v1/\"")
         }
         create("prod") {
             dimension = "env"
