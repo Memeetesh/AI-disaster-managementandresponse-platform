@@ -44,6 +44,20 @@ const SEVERITY_COLORS: Record<string, string> = {
 
 const EMPTY_FC = { type: "FeatureCollection" as const, features: [] };
 
+// maplibre-gl v6 made WebGL2 mandatory (v5 and earlier fell back to WebGL1),
+// and does so silently — no event fires, the container just stays blank.
+// Feature-detect up front so a WebGL2-less browser/device gets an actual
+// message instead of an unexplained empty map.
+function supportsWebGL2(): boolean {
+  if (typeof document === "undefined") return true; // SSR: assume yes, re-check client-side
+  try {
+    const canvas = document.createElement("canvas");
+    return !!canvas.getContext("webgl2");
+  } catch {
+    return false;
+  }
+}
+
 function incidentsToGeoJSON(incidents: Incident[]) {
   return {
     type: "FeatureCollection" as const,
@@ -119,6 +133,7 @@ export function RiskMap({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
   const onZoneClickRef = useRef(onZoneClick);
   useEffect(() => {
     onZoneClickRef.current = onZoneClick;
@@ -126,6 +141,21 @@ export function RiskMap({
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
+
+    if (!supportsWebGL2()) {
+      // Deliberately synchronous: this is a one-time client-only capability
+      // check gating whether the map mounts at all, not state that could
+      // cascade — same render either way, since the map is never created
+      // when this is true. SSR renders with mapError still null (no
+      // WebGL2/`document` on the server); this corrects on the client's
+      // first paint before the map would otherwise appear, so there's
+      // nothing for a user to see flip.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setMapError(
+        "This browser/device doesn't support WebGL2, which the map requires. Try a recent version of Chrome, Firefox, or Edge."
+      );
+      return;
+    }
 
     const map = new MapLibreMap({
       container: containerRef.current,
@@ -146,8 +176,18 @@ export function RiskMap({
     });
     mapRef.current = map;
     map.addControl(new NavigationControl(), "top-right");
+    let hasLoaded = false;
+    map.on("error", (e) => {
+      // Non-fatal errors (a missing tile, a flaky request) fire constantly
+      // and shouldn't block the whole map — only surface this for context
+      // loss / style failures, i.e. before the map ever finished loading.
+      if (!hasLoaded) {
+        setMapError(e?.error?.message || "Map failed to load.");
+      }
+    });
 
     map.on("load", () => {
+      hasLoaded = true;
       map.addSource("risk-zones", { type: "geojson", data: EMPTY_FC });
       map.addLayer({
         id: "risk-zones-fill",
@@ -375,5 +415,14 @@ export function RiskMap({
     });
   }, [loaded, focus]);
 
-  return <div ref={containerRef} className={className ?? "h-full w-full"} />;
+  return (
+    <div className={`relative ${className ?? "h-full w-full"}`}>
+      <div ref={containerRef} className="h-full w-full" />
+      {mapError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-950 p-6 text-center">
+          <p className="max-w-sm text-sm text-slate-400">{mapError}</p>
+        </div>
+      )}
+    </div>
+  );
 }
