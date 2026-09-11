@@ -1,7 +1,9 @@
 package com.drishti.citizen.feature.emergency
 
 import android.Manifest
+import android.content.Intent
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -28,12 +30,14 @@ import androidx.compose.material.icons.rounded.LocalHospital
 import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -133,6 +137,17 @@ fun EmergencyScreen(viewModel: EmergencyViewModel = hiltViewModel()) {
             submitting = state.checkInSubmitting,
             message = state.checkInMessage,
             onClick = viewModel::markSafe,
+        )
+
+        EspRelayCard(
+            gatewayIp = state.espGatewayIp,
+            sending = state.espSending,
+            message = state.espMessage,
+            onGatewayIpChange = viewModel::setEspGatewayIp,
+            onOpenWifiSettings = {
+                runCatching { context.startActivity(Intent(Settings.ACTION_WIFI_SETTINGS)) }
+            },
+            onSend = viewModel::sendViaEsp,
         )
         Spacer(Modifier.height(8.dp))
     }
@@ -338,6 +353,58 @@ private fun SafeButton(
         if (message != null) {
             Spacer(Modifier.height(6.dp))
             Text(message, style = MaterialTheme.typography.bodySmall, color = Slate500)
+        }
+    }
+}
+
+/**
+ * Last resort when there's no signal at all: the phone joins the ESP32
+ * gateway's own hotspot (see `android/esp_Saarthi.ino`) and this POSTs the
+ * SOS straight to it — bypassing the app's normal backend connection, which
+ * is unreachable anyway once the phone leaves its usual WiFi.
+ */
+@Composable
+private fun EspRelayCard(
+    gatewayIp: String,
+    sending: Boolean,
+    message: String?,
+    onGatewayIpChange: (String) -> Unit,
+    onOpenWifiSettings: () -> Unit,
+    onSend: () -> Unit,
+) {
+    Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
+        Column(Modifier.padding(16.dp)) {
+            Text("Offline via ESP32", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "No signal at all? Connect your WiFi to the ESP32's hotspot — it needs no internet — " +
+                    "and send your SOS through it instead.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Slate500,
+            )
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(onClick = onOpenWifiSettings) { Text("Open WiFi settings") }
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(
+                value = gatewayIp,
+                onValueChange = onGatewayIpChange,
+                label = { Text("ESP32 gateway IP") },
+                singleLine = true,
+                enabled = !sending,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(10.dp))
+            Button(onClick = onSend, enabled = !sending, modifier = Modifier.fillMaxWidth()) {
+                if (sending) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
+                } else {
+                    Text("Send via ESP32")
+                }
+            }
+            if (message != null) {
+                Spacer(Modifier.height(8.dp))
+                Text(message, style = MaterialTheme.typography.bodySmall, color = Slate500)
+            }
         }
     }
 }

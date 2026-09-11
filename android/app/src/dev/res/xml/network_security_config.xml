@@ -6,6 +6,8 @@
         <domain includeSubdomains="true">localhost</domain>
         <domain includeSubdomains="true">127.0.0.1</domain>
         <!-- Dev machine on the LAN (physical device). Update if your Wi-Fi IP changes. -->
-        <domain includeSubdomains="true">10.59.57.80</domain>
+        <domain includeSubdomains="true">10.149.121.80</domain>
+        <!-- ESP32 offline-SOS gateway's own SoftAP (android/esp_Saarthi.ino). -->
+        <domain includeSubdomains="true">192.168.4.1</domain>
     </domain-config>
 </network-security-config>

@@ -2,6 +2,9 @@ package com.drishti.citizen.feature.emergency
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.drishti.citizen.core.auth.TokenStore
+import com.drishti.citizen.core.esp.EspRelayRepository
+import com.drishti.citizen.core.esp.EspRelayResult
 import com.drishti.citizen.core.location.LatLon
 import com.drishti.citizen.core.location.LocationProvider
 import com.drishti.citizen.core.location.LocationUiState
@@ -26,6 +29,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
+
+/** ESP32 SoftAP's default gateway address — see `android/esp_Saarthi.ino`. */
+private const val DEFAULT_ESP_GATEWAY_IP = "192.168.4.1"
 
 sealed interface SosStage {
     data object Idle : SosStage
@@ -52,6 +58,10 @@ data class EmergencyUiState(
     val checkIn: CheckInDto? = null,
     val checkInSubmitting: Boolean = false,
     val checkInMessage: String? = null,
+    /** Offline path: phone joins the ESP32's own hotspot and relays through it. */
+    val espGatewayIp: String = DEFAULT_ESP_GATEWAY_IP,
+    val espSending: Boolean = false,
+    val espMessage: String? = null,
 )
 
 @HiltViewModel
@@ -62,6 +72,8 @@ class EmergencyViewModel @Inject constructor(
     private val placesRepository: PlacesRepository,
     private val sheltersRepository: SheltersRepository,
     private val sosQueue: SosQueue,
+    private val espRelayRepository: EspRelayRepository,
+    private val tokenStore: TokenStore,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(EmergencyUiState())
@@ -224,6 +236,48 @@ class EmergencyViewModel @Inject constructor(
     }
 
     fun consumeCheckInMessage() = _state.update { it.copy(checkInMessage = null) }
+
+    // --- offline via ESP32 gateway ---
+
+    fun setEspGatewayIp(ip: String) = _state.update { it.copy(espGatewayIp = ip) }
+
+    fun sendViaEsp() {
+        if (_state.value.espSending) return
+        _state.update { it.copy(espSending = true, espMessage = null) }
+        viewModelScope.launch {
+            // No normal network here by design — try hard for a fix, including
+            // the cached fallback currentFix() offers, before giving up.
+            val fix = locationProvider.emergencyFix()
+                ?: locationProvider.currentFix()
+                ?: (_state.value.location as? LocationUiState.Ready)?.at
+            if (fix == null) {
+                _state.update {
+                    it.copy(espSending = false, espMessage = "Couldn't get a location fix. Try again.")
+                }
+                return@launch
+            }
+            val gatewayIp = _state.value.espGatewayIp.trim().ifBlank { DEFAULT_ESP_GATEWAY_IP }
+            val result = espRelayRepository.sendSos(
+                gatewayIp = gatewayIp,
+                token = tokenStore.peek(),
+                latitude = fix.lat,
+                longitude = fix.lon,
+                peopleAffected = 1,
+                description = SOS_DESCRIPTION,
+            )
+            _state.update {
+                when (result) {
+                    is EspRelayResult.Success -> it.copy(
+                        espSending = false,
+                        espMessage = "Sent via the ESP32 gateway — check the dashboard.",
+                    )
+                    is EspRelayResult.Failure -> it.copy(espSending = false, espMessage = result.message)
+                }
+            }
+        }
+    }
+
+    fun consumeEspMessage() = _state.update { it.copy(espMessage = null) }
 
     override fun onCleared() {
         holdJob?.cancel()

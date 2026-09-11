@@ -52,13 +52,15 @@ cd android
 ./gradlew :app:installDevDebug        # emulator or USB device with USB debugging
 ```
 
-- The `dev` flavor's `BASE_URL` is `http://10.0.2.2:8000/api/v1/` — that's how
-  the **emulator** reaches your host's `localhost`. Works out of the box.
-- **Physical device:** edit the `dev` flavor `BASE_URL` in
-  `android/app/build.gradle.kts` to `http://<your-machine-LAN-IP>:8000/api/v1/`,
-  reinstall. (Cleartext to LAN IPs is already allowed for the `dev` flavor via
-  `app/src/dev/res/xml/network_security_config.xml` — add your IP there if it
-  isn't a `10.0.2.2` / `localhost` host.)
+- The `dev` flavor's `BASE_URL` is currently pinned to a **physical device** on
+  the LAN: `http://10.149.121.80:8000/api/v1/` (`android/app/build.gradle.kts`),
+  with that same IP allow-listed for cleartext in
+  `app/src/dev/res/xml/network_security_config.xml`. This is your laptop's
+  Wi‑Fi IP (`ip -4 addr show wlp4s0`) — **it changes whenever you join a
+  different Wi‑Fi network**; update both files (and reinstall) when it does.
+- **Emulator instead:** set `BASE_URL` back to `http://10.0.2.2:8000/api/v1/`
+  (already allow-listed) — that's how the emulator reaches your host's
+  `localhost`, no IP chasing needed.
 - In the app: **Register** a new citizen (any name / phone / 8+ char password),
   or sign in as `9000000000` / `drishtidemo`.
 - When prompted for location, grant **Precise** (not "Approximate"). The SOS
