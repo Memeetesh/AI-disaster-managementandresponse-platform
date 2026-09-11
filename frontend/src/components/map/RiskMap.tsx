@@ -23,16 +23,21 @@ import type {
 const DEFAULT_CENTER: [number, number] = [80.2707, 13.0827];
 const DEFAULT_ZOOM = 11;
 
-// CARTO's free basemap tiles, not tile.openstreetmap.org — OSM's raw tile
-// server actively blocks apps like this one under its Tile Usage Policy
-// (https://operations.osmfoundation.org/policies/tiles/): it returns HTTP
-// 200 with an `image/png` content-type but an empty/unreadable body, which
-// MapLibre reports as "the source image could not be decoded". CARTO's
-// tiles are still OSM-sourced data, just served from an endpoint meant for
-// exactly this kind of embedding, with permissive CORS.
+// Primary basemap: CARTO's free voyager tiles (OSM data, permissive CORS).
+// Fallback: OpenStreetMap France humanitarian CDN — also OSM data but a
+// different origin, so if one CDN is blocked the other may still work.
+// Note: tile.openstreetmap.org is deliberately NOT used here — OSM's own
+// tile server returns HTTP 200 with an unreadable body for high-traffic
+// apps (policy violation), causing MapLibre to report decode errors.
 const TILE_URL =
   process.env.NEXT_PUBLIC_MAP_TILE_URL ??
   "https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png";
+
+const FALLBACK_TILE_URL =
+  "https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png";
+
+// How many consecutive tile errors trigger a switch to the fallback CDN.
+const TILE_ERROR_THRESHOLD = 3;
 
 const RISK_COLORS: Record<string, string> = {
   low: "#16a34a",
@@ -146,6 +151,9 @@ export function RiskMap({
   const mapRef = useRef<MapLibreMap | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [tileWarning, setTileWarning] = useState<string | null>(null);
+  const tileErrorCount = useRef(0);
+  const didSwitchFallback = useRef(false);
   const onZoneClickRef = useRef(onZoneClick);
   useEffect(() => {
     onZoneClickRef.current = onZoneClick;
@@ -206,11 +214,45 @@ export function RiskMap({
 
     let hasLoaded = false;
     map.on("error", (e) => {
-      // Non-fatal errors (a missing tile, a flaky request) fire constantly
-      // and shouldn't block the whole map — only surface this for context
-      // loss / style failures, i.e. before the map ever finished loading.
-      if (!hasLoaded) {
+      // Tile errors have a `tile` property; they happen after the map style
+      // has loaded and are non-fatal (just missing background imagery).
+      const isTileError = !!(e as unknown as Record<string, unknown>).tile;
+
+      if (!hasLoaded && !isTileError) {
+        // A fatal style/WebGL error before the map finished loading.
         setMapError(e?.error?.message || "Map failed to load.");
+        return;
+      }
+
+      if (isTileError) {
+        tileErrorCount.current += 1;
+
+        // After several consecutive tile errors, switch to the fallback CDN.
+        if (!didSwitchFallback.current && tileErrorCount.current >= TILE_ERROR_THRESHOLD) {
+          didSwitchFallback.current = true;
+          try {
+            const src = map.getSource("osm") as { setTiles?: (t: string[]) => void } | undefined;
+            if (src && typeof src.setTiles === "function") {
+              src.setTiles([FALLBACK_TILE_URL]);
+              // Reset counter so continued fallback errors don't re-trigger.
+              tileErrorCount.current = 0;
+              setTileWarning(null);
+            } else {
+              setTileWarning(
+                "Map tiles are unavailable (network issue). The SOS/shelter overlays still work."
+              );
+            }
+          } catch {
+            setTileWarning(
+              "Map tiles are unavailable (network issue). The SOS/shelter overlays still work."
+            );
+          }
+        } else if (didSwitchFallback.current && tileErrorCount.current >= TILE_ERROR_THRESHOLD) {
+          // Both CDNs failed — tell the user.
+          setTileWarning(
+            "Map tiles are unavailable — no internet access. SOS pins and overlays still work."
+          );
+        }
       }
     });
 
@@ -454,9 +496,24 @@ export function RiskMap({
   return (
     <div className={`relative ${className ?? "h-full w-full"}`}>
       <div ref={containerRef} className="h-full w-full" />
+
+      {/* Fatal error: map canvas never loaded */}
       {mapError && (
-        <div className="absolute inset-0 flex items-center justify-center bg-slate-950 p-6 text-center">
-          <p className="max-w-sm text-sm text-slate-400">{mapError}</p>
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-950 p-6 text-center z-10">
+          <div className="max-w-sm">
+            <p className="text-sm font-semibold text-slate-300 mb-1">Map failed to load</p>
+            <p className="text-xs text-slate-500">{mapError}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Non-fatal warning: canvas works but background tiles are unreachable */}
+      {tileWarning && !mapError && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 max-w-xs w-[calc(100%-1rem)] pointer-events-none">
+          <div className="flex items-start gap-2 rounded-xl bg-warn-900/90 backdrop-blur-sm border border-warn-700/60 px-3 py-2 shadow-lg">
+            <span className="mt-0.5 text-warn-400 text-sm flex-shrink-0">⚠</span>
+            <p className="text-[11px] leading-snug text-warn-200">{tileWarning}</p>
+          </div>
         </div>
       )}
     </div>
