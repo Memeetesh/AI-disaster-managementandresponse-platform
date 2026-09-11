@@ -173,8 +173,10 @@ export function RiskMap({
       return;
     }
 
+    const container = containerRef.current;
+
     const map = new MapLibreMap({
-      container: containerRef.current,
+      container,
       style: {
         version: 8,
         sources: {
@@ -193,6 +195,15 @@ export function RiskMap({
     });
     mapRef.current = map;
     map.addControl(new NavigationControl(), "top-right");
+
+    // Resize the map whenever the container changes dimensions (e.g. when the
+    // auth-loading overlay is removed and the dashboard fills in). Without
+    // this, MapLibre can initialise against a 0×0 canvas and stay blank.
+    const resizeObserver = new ResizeObserver(() => {
+      if (mapRef.current) mapRef.current.resize();
+    });
+    resizeObserver.observe(container);
+
     let hasLoaded = false;
     map.on("error", (e) => {
       // Non-fatal errors (a missing tile, a flaky request) fire constantly
@@ -205,6 +216,9 @@ export function RiskMap({
 
     map.on("load", () => {
       hasLoaded = true;
+      // Force a resize in case the container grew after the map was created
+      // (the ResizeObserver may not fire synchronously on initial mount).
+      map.resize();
       map.addSource("risk-zones", { type: "geojson", data: EMPTY_FC });
       map.addLayer({
         id: "risk-zones-fill",
@@ -391,6 +405,7 @@ export function RiskMap({
     });
 
     return () => {
+      resizeObserver.disconnect();
       map.remove();
       mapRef.current = null;
       setLoaded(false);

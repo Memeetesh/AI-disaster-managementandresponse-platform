@@ -758,6 +758,8 @@ export default function DashboardPage() {
                 onChanged={() => {
                   void queryClient.invalidateQueries({ queryKey: queryKeys.incidents() });
                   void queryClient.invalidateQueries({ queryKey: queryKeys.riskMap() });
+                  void queryClient.invalidateQueries({ queryKey: queryKeys.rescueOps() });
+                  void queryClient.invalidateQueries({ queryKey: queryKeys.dashboardStats() });
                   void queryClient.invalidateQueries({ queryKey: queryKeys.simulatorState() });
                 }}
               />
