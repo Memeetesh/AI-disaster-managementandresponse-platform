@@ -23,14 +23,21 @@ import type {
 const DEFAULT_CENTER: [number, number] = [80.2707, 13.0827];
 const DEFAULT_ZOOM = 11;
 
-// OpenFreeMap — free, no API key, served from Cloudflare CDN.
-// "positron" is a clean light/white style: coloured risk-zone polygons and
-// SOS pins stand out far better on it than on a grey raster tile base.
-// Confirmed reachable at 260ms from this environment.
-// https://openfreemap.org
-const MAP_STYLE_URL =
-  process.env.NEXT_PUBLIC_MAP_TILE_URL ??
-  "https://tiles.openfreemap.org/styles/positron";
+// CARTO's free raster tiles: OSM data, permissive CORS, confirmed 200 from
+// this environment. We use an inline style object (not a remote style URL)
+// so there are no external font/sprite/glyph dependencies that can fail
+// silently and leave the canvas white.
+const PRIMARY_TILE_URL =
+  "https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+
+// Fallback CDN — different origin, so if CARTO is blocked the user still
+// gets background imagery. Also confirmed reachable (404 on wrong tile
+// coords means it's reachable, just no tile at that location).
+const FALLBACK_TILE_URL =
+  "https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png";
+
+// How many consecutive tile errors trigger a CDN switch.
+const TILE_ERROR_THRESHOLD = 4;
 
 const RISK_COLORS: Record<string, string> = {
   low: "#16a34a",
@@ -50,10 +57,8 @@ const SEVERITY_COLORS: Record<string, string> = {
 
 const EMPTY_FC = { type: "FeatureCollection" as const, features: [] };
 
-// maplibre-gl v6 made WebGL2 mandatory (v5 and earlier fell back to WebGL1),
-// and does so silently — no event fires, the container just stays blank.
-// Feature-detect up front so a WebGL2-less browser/device gets an actual
-// message instead of an unexplained empty map.
+// maplibre-gl v6 made WebGL2 mandatory. Feature-detect up front so a
+// WebGL2-less browser gets an error message instead of a silent blank canvas.
 function supportsWebGL2(): boolean {
   if (typeof document === "undefined") return true; // SSR: assume yes
   try {
@@ -62,6 +67,22 @@ function supportsWebGL2(): boolean {
   } catch {
     return false;
   }
+}
+
+function buildInlineStyle(tileUrl: string) {
+  return {
+    version: 8 as const,
+    sources: {
+      osm: {
+        type: "raster" as const,
+        tiles: [tileUrl],
+        tileSize: 256,
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      },
+    },
+    layers: [{ id: "osm", type: "raster" as const, source: "osm" }],
+  };
 }
 
 function incidentsToGeoJSON(incidents: Incident[]) {
@@ -118,14 +139,13 @@ interface RiskMapProps {
   className?: string;
   riskMap?: RiskMapResponse;
   incidents?: Incident[];
-  shelters?: Shelter[];
+  shelters?: Shelter[]
   responders?: Responder[];
   rescueOps?: RescueOperation[];
   onZoneClick?: (properties: RiskZoneProperties) => void;
-  /** Fires when an incident marker is clicked — lets the caller sync its
-   * own selection state (e.g. highlight the matching row in a feed list). */
+  /** Fires when an incident marker is clicked. */
   onIncidentClick?: (incidentId: number) => void;
-  /** `[lng, lat]` to pan/zoom the map to (e.g. a new SOS). Changing it re-triggers the fly. */
+  /** `[lng, lat]` to pan/zoom to (e.g. a new SOS). Changing it re-triggers the fly. */
   focus?: [number, number] | null;
 }
 
@@ -146,15 +166,12 @@ export function RiskMap({
   const [mapError, setMapError] = useState<string | null>(null);
   const [tileWarning, setTileWarning] = useState<string | null>(null);
   const tileErrorCount = useRef(0);
+  const didSwitchFallback = useRef(false);
 
   const onZoneClickRef = useRef(onZoneClick);
-  useEffect(() => {
-    onZoneClickRef.current = onZoneClick;
-  }, [onZoneClick]);
+  useEffect(() => { onZoneClickRef.current = onZoneClick; }, [onZoneClick]);
   const onIncidentClickRef = useRef(onIncidentClick);
-  useEffect(() => {
-    onIncidentClickRef.current = onIncidentClick;
-  }, [onIncidentClick]);
+  useEffect(() => { onIncidentClickRef.current = onIncidentClick; }, [onIncidentClick]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -162,7 +179,7 @@ export function RiskMap({
     if (!supportsWebGL2()) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setMapError(
-        "This browser/device doesn't support WebGL2, which the map requires. Try a recent version of Chrome, Firefox, or Edge."
+        "This browser/device doesn't support WebGL2, which the map requires. Try a recent Chrome, Firefox, or Edge."
       );
       return;
     }
@@ -171,53 +188,63 @@ export function RiskMap({
 
     const map = new MapLibreMap({
       container,
-      // OpenFreeMap vector style — full MapLibre GL style JSON served from
-      // Cloudflare CDN. Much sharper than raster tiles and loads faster.
-      style: MAP_STYLE_URL,
+      style: buildInlineStyle(PRIMARY_TILE_URL),
       center: DEFAULT_CENTER,
       zoom: DEFAULT_ZOOM,
     });
     mapRef.current = map;
     map.addControl(new NavigationControl(), "top-right");
 
-    // Resize the map whenever the container changes dimensions (e.g. when the
-    // auth-loading overlay is removed and the dashboard fills in). Without
-    // this, MapLibre can initialise against a 0×0 canvas and stay blank.
-    const resizeObserver = new ResizeObserver(() => {
+    // Resize whenever the container dimensions change (e.g. when the
+    // auth-loading overlay clears and the dashboard fills in). Without this
+    // MapLibre can initialise with a 0×0 canvas and stay blank forever.
+    const ro = new ResizeObserver(() => {
       if (mapRef.current) mapRef.current.resize();
     });
-    resizeObserver.observe(container);
+    ro.observe(container);
 
     let hasLoaded = false;
+
     map.on("error", (e) => {
-      // Tile/glyph/sprite errors have a `tile` or `source` property and are
-      // non-fatal — they just mean the background map is missing. Only show
-      // the full-screen error overlay for pre-load fatal failures.
       const isTileError = !!(e as unknown as Record<string, unknown>).tile;
 
       if (!hasLoaded && !isTileError) {
-        setMapError(e?.error?.message || "Map style failed to load. Check your internet connection.");
+        // Fatal pre-load error (WebGL context loss, bad style JSON, etc.)
+        setMapError(e?.error?.message ?? "Map failed to load.");
         return;
       }
 
       if (isTileError) {
         tileErrorCount.current += 1;
-        // Show a soft warning after a few consecutive tile failures.
-        if (tileErrorCount.current >= 3) {
-          setTileWarning(
-            "Map tiles are unavailable — network issue. SOS pins and overlays still work."
-          );
+
+        if (!didSwitchFallback.current && tileErrorCount.current >= TILE_ERROR_THRESHOLD) {
+          // Primary CDN is flaky — switch tile source to the fallback.
+          didSwitchFallback.current = true;
+          try {
+            const src = map.getSource("osm") as GeoJSONSource & { setTiles?: (t: string[]) => void };
+            if (typeof src?.setTiles === "function") {
+              src.setTiles([FALLBACK_TILE_URL]);
+              tileErrorCount.current = 0; // reset so fallback errors don't re-trigger
+            } else {
+              setTileWarning("Map tiles unavailable (network). SOS overlays still work.");
+            }
+          } catch {
+            setTileWarning("Map tiles unavailable (network). SOS overlays still work.");
+          }
+        } else if (didSwitchFallback.current && tileErrorCount.current >= TILE_ERROR_THRESHOLD) {
+          // Both CDNs failed — show a soft warning, keep overlays visible.
+          setTileWarning("Map background tiles unavailable — no internet. SOS pins and overlays still work.");
         }
       }
     });
 
     map.on("load", () => {
       hasLoaded = true;
-      // Force a resize in case the container grew after the map was created
-      // (the ResizeObserver may not fire synchronously on initial mount).
+      // Force a resize in case the container grew after the MapLibreMap
+      // constructor ran (ResizeObserver may not fire synchronously on mount).
       map.resize();
 
-      // ── Data sources ──────────────────────────────────────────────────────
+      // ── GeoJSON data sources ─────────────────────────────────────────────
       map.addSource("risk-zones", { type: "geojson", data: EMPTY_FC });
       map.addLayer({
         id: "risk-zones-fill",
@@ -225,8 +252,7 @@ export function RiskMap({
         source: "risk-zones",
         paint: {
           "fill-color": [
-            "match",
-            ["get", "risk_category"],
+            "match", ["get", "risk_category"],
             "low",       RISK_COLORS.low,
             "moderate",  RISK_COLORS.moderate,
             "high",      RISK_COLORS.high,
@@ -234,14 +260,14 @@ export function RiskMap({
             "critical",  RISK_COLORS.critical,
             "#64748b",
           ],
-          "fill-opacity": 0.30,
+          "fill-opacity": 0.35,
         },
       });
       map.addLayer({
         id: "risk-zones-outline",
         type: "line",
         source: "risk-zones",
-        paint: { "line-color": "#0f172a", "line-width": 0.8, "line-opacity": 0.5 },
+        paint: { "line-color": "#0f172a", "line-width": 1 },
       });
 
       map.addSource("shelters", { type: "geojson", data: EMPTY_FC });
@@ -265,8 +291,7 @@ export function RiskMap({
         paint: {
           "circle-radius": 8,
           "circle-color": [
-            "match",
-            ["get", "severity"],
+            "match", ["get", "severity"],
             "low",       SEVERITY_COLORS.low,
             "moderate",  SEVERITY_COLORS.moderate,
             "high",      SEVERITY_COLORS.high,
@@ -301,8 +326,7 @@ export function RiskMap({
         paint: {
           "circle-radius": 6,
           "circle-color": [
-            "match",
-            ["get", "status"],
+            "match", ["get", "status"],
             "available", "#22c55e",
             "en_route",  "#f59e0b",
             "busy",      "#ef4444",
@@ -314,7 +338,7 @@ export function RiskMap({
         },
       });
 
-      // ── Popups & click handlers ───────────────────────────────────────────
+      // ── Popups & click handlers ──────────────────────────────────────────
       const pointPopup = (
         layer: string,
         html: (props: Record<string, unknown>) => string
@@ -324,38 +348,25 @@ export function RiskMap({
           if (!f) return;
           new Popup({ closeButton: true })
             .setLngLat(e.lngLat)
-            .setHTML(
-              `<div style="font:12px system-ui;color:#0f172a;line-height:1.5">${html(
-                f.properties as Record<string, unknown>
-              )}</div>`
-            )
+            .setHTML(`<div style="font:12px system-ui;color:#0f172a;line-height:1.5">${html(f.properties as Record<string, unknown>)}</div>`)
             .addTo(map);
         });
-        map.on("mouseenter", layer, () => {
-          map.getCanvas().style.cursor = "pointer";
-        });
-        map.on("mouseleave", layer, () => {
-          map.getCanvas().style.cursor = "";
-        });
+        map.on("mouseenter", layer, () => { map.getCanvas().style.cursor = "pointer"; });
+        map.on("mouseleave", layer, () => { map.getCanvas().style.cursor = ""; });
       };
 
-      pointPopup(
-        "incidents-points",
-        (p) =>
-          `<strong>Incident #${p.id}</strong><br/>${p.type} · ${p.severity}<br/>status: ${p.status}`
+      pointPopup("incidents-points", (p) =>
+        `<strong>Incident #${p.id}</strong><br/>${p.type} · ${p.severity}<br/>status: ${p.status}`
       );
       map.on("click", "incidents-points", (e: MapLayerMouseEvent) => {
         const id = e.features?.[0]?.properties?.id;
         if (typeof id === "number") onIncidentClickRef.current?.(id);
       });
-      pointPopup(
-        "shelters-points",
-        (p) => `<strong>${p.name}</strong><br/>status: ${p.status}`
+      pointPopup("shelters-points", (p) =>
+        `<strong>${p.name}</strong><br/>status: ${p.status}`
       );
-      pointPopup(
-        "responders-points",
-        (p) =>
-          `<strong>${p.name}</strong><br/>${p.vehicle || "team"} · ${p.status}`
+      pointPopup("responders-points", (p) =>
+        `<strong>${p.name}</strong><br/>${p.vehicle || "team"} · ${p.status}`
       );
 
       map.on("click", "risk-zones-fill", (e: MapLayerMouseEvent) => {
@@ -363,80 +374,70 @@ export function RiskMap({
         if (!feature) return;
         const props = feature.properties as unknown as RiskZoneProperties;
         onZoneClickRef.current?.(props);
-
         const category = String(props.risk_category).replace("_", " ").toUpperCase();
         new Popup({ closeButton: true })
           .setLngLat(e.lngLat)
           .setHTML(
             `<div style="font:12px system-ui;color:#0f172a;line-height:1.5">` +
-              `<strong>Risk ${props.risk_score} — ${category}</strong><br/>` +
-              `Hazard: ${props.hazard_score}<br/>` +
-              `Population exposure: ${props.population_exposure}<br/>` +
-              `Infrastructure vulnerability: ${props.infrastructure_vulnerability}<br/>` +
-              `Accessibility: ${props.accessibility_score}<br/>` +
-              `Historical risk: ${props.historical_risk_score}<br/>` +
-              `Nearby incidents: ${props.nearby_incident_count}` +
-              `</div>`
+            `<strong>Risk ${props.risk_score} — ${category}</strong><br/>` +
+            `Hazard: ${props.hazard_score}<br/>` +
+            `Population exposure: ${props.population_exposure}<br/>` +
+            `Infrastructure vulnerability: ${props.infrastructure_vulnerability}<br/>` +
+            `Accessibility: ${props.accessibility_score}<br/>` +
+            `Historical risk: ${props.historical_risk_score}<br/>` +
+            `Nearby incidents: ${props.nearby_incident_count}` +
+            `</div>`
           )
           .addTo(map);
       });
-      map.on("mouseenter", "risk-zones-fill", () => {
-        map.getCanvas().style.cursor = "pointer";
-      });
-      map.on("mouseleave", "risk-zones-fill", () => {
-        map.getCanvas().style.cursor = "";
-      });
+      map.on("mouseenter", "risk-zones-fill", () => { map.getCanvas().style.cursor = "pointer"; });
+      map.on("mouseleave", "risk-zones-fill", () => { map.getCanvas().style.cursor = ""; });
 
       setLoaded(true);
     });
 
     return () => {
-      resizeObserver.disconnect();
+      ro.disconnect();
       map.remove();
       mapRef.current = null;
       setLoaded(false);
     };
   }, []);
 
-  // ── Data update effects ──────────────────────────────────────────────────
+  // ── Live data updates ────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!loaded || !mapRef.current) return;
-    const source = mapRef.current.getSource("risk-zones") as GeoJSONSource | undefined;
-    source?.setData(riskMap ?? EMPTY_FC);
+    (mapRef.current.getSource("risk-zones") as GeoJSONSource | undefined)?.setData(riskMap ?? EMPTY_FC);
   }, [loaded, riskMap]);
 
   useEffect(() => {
     if (!loaded || !mapRef.current) return;
-    const source = mapRef.current.getSource("incidents") as GeoJSONSource | undefined;
-    source?.setData(incidents ? incidentsToGeoJSON(incidents) : EMPTY_FC);
+    (mapRef.current.getSource("incidents") as GeoJSONSource | undefined)
+      ?.setData(incidents ? incidentsToGeoJSON(incidents) : EMPTY_FC);
   }, [loaded, incidents]);
 
   useEffect(() => {
     if (!loaded || !mapRef.current) return;
-    const source = mapRef.current.getSource("shelters") as GeoJSONSource | undefined;
-    source?.setData(shelters ? sheltersToGeoJSON(shelters) : EMPTY_FC);
+    (mapRef.current.getSource("shelters") as GeoJSONSource | undefined)
+      ?.setData(shelters ? sheltersToGeoJSON(shelters) : EMPTY_FC);
   }, [loaded, shelters]);
 
   useEffect(() => {
     if (!loaded || !mapRef.current) return;
-    const source = mapRef.current.getSource("responders") as GeoJSONSource | undefined;
-    source?.setData(responders ? respondersToGeoJSON(responders) : EMPTY_FC);
+    (mapRef.current.getSource("responders") as GeoJSONSource | undefined)
+      ?.setData(responders ? respondersToGeoJSON(responders) : EMPTY_FC);
   }, [loaded, responders]);
 
   useEffect(() => {
     if (!loaded || !mapRef.current) return;
-    const source = mapRef.current.getSource("rescue-routes") as GeoJSONSource | undefined;
-    source?.setData(rescueOps ? routesToGeoJSON(rescueOps) : EMPTY_FC);
+    (mapRef.current.getSource("rescue-routes") as GeoJSONSource | undefined)
+      ?.setData(rescueOps ? routesToGeoJSON(rescueOps) : EMPTY_FC);
   }, [loaded, rescueOps]);
 
   useEffect(() => {
     if (!loaded || !mapRef.current || !focus) return;
-    mapRef.current.flyTo({
-      center: focus,
-      zoom: Math.max(mapRef.current.getZoom(), 14),
-      speed: 1.4,
-    });
+    mapRef.current.flyTo({ center: focus, zoom: Math.max(mapRef.current.getZoom(), 14), speed: 1.4 });
   }, [loaded, focus]);
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -445,7 +446,6 @@ export function RiskMap({
     <div className={`relative ${className ?? "h-full w-full"}`}>
       <div ref={containerRef} className="h-full w-full" />
 
-      {/* Fatal error: style / WebGL never loaded */}
       {mapError && (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-950 p-6 text-center z-10">
           <div className="max-w-sm">
@@ -455,7 +455,6 @@ export function RiskMap({
         </div>
       )}
 
-      {/* Non-fatal: canvas works but background tiles are unreachable */}
       {tileWarning && !mapError && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 max-w-xs w-[calc(100%-1rem)] pointer-events-none">
           <div className="flex items-start gap-2 rounded-xl bg-warn-900/90 backdrop-blur-sm border border-warn-700/60 px-3 py-2 shadow-lg">
