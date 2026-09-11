@@ -12,6 +12,7 @@ import {
   Flower2, Hand, Smile, BookOpen, Headphones, MessagesSquare,
   ChevronDown, ChevronUp, ExternalLink, Star, ShieldAlert,
   LocateFixed, Accessibility, Volume2, Languages, Settings, LogOut,
+  Layers, RotateCcw,
   HelpCircle,
   type LucideProps,
 } from "lucide-react";
@@ -33,6 +34,7 @@ const icons: IconMap = {
   Flower2, Hand, Smile, BookOpen, Headphones, MessagesSquare,
   ChevronDown, ChevronUp, ExternalLink, Star, ShieldAlert,
   LocateFixed, Accessibility, Volume2, Languages, Settings, LogOut,
+  Layers, RotateCcw,
 };
 
 interface IconProps extends LucideProps {

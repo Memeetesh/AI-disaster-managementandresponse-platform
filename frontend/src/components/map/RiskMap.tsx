@@ -116,6 +116,9 @@ interface RiskMapProps {
   responders?: Responder[];
   rescueOps?: RescueOperation[];
   onZoneClick?: (properties: RiskZoneProperties) => void;
+  /** Fires when an incident marker is clicked — lets the caller sync its
+   * own selection state (e.g. highlight the matching row in a feed list). */
+  onIncidentClick?: (incidentId: number) => void;
   /** `[lng, lat]` to pan/zoom the map to (e.g. a new SOS). Changing it re-triggers the fly. */
   focus?: [number, number] | null;
 }
@@ -128,6 +131,7 @@ export function RiskMap({
   responders,
   rescueOps,
   onZoneClick,
+  onIncidentClick,
   focus,
 }: RiskMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -138,6 +142,10 @@ export function RiskMap({
   useEffect(() => {
     onZoneClickRef.current = onZoneClick;
   }, [onZoneClick]);
+  const onIncidentClickRef = useRef(onIncidentClick);
+  useEffect(() => {
+    onIncidentClickRef.current = onIncidentClick;
+  }, [onIncidentClick]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -327,6 +335,10 @@ export function RiskMap({
         (p) =>
           `<strong>Incident #${p.id}</strong><br/>${p.type} · ${p.severity}<br/>status: ${p.status}`
       );
+      map.on("click", "incidents-points", (e: MapLayerMouseEvent) => {
+        const id = e.features?.[0]?.properties?.id;
+        if (typeof id === "number") onIncidentClickRef.current?.(id);
+      });
       pointPopup(
         "shelters-points",
         (p) => `<strong>${p.name}</strong><br/>status: ${p.status}`

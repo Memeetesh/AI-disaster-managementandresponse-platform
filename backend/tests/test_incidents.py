@@ -133,6 +133,42 @@ def test_responder_can_list_all_and_verify_incident(client, db_session):
     assert body["verified_at"] is not None
 
 
+def test_responder_sees_reporter_contact_on_list_and_get(client, db_session):
+    citizen_token = register_citizen(client, "8000000011")
+    make_responder(db_session, "8000000012")
+    responder_token = login(client, "8000000012")
+
+    created = client.post(
+        "/api/v1/sos",
+        headers=auth_headers(citizen_token),
+        data={"latitude": "1", "longitude": "1", "people_affected": "1"},
+    ).json()
+
+    listed = client.get("/api/v1/incidents", headers=auth_headers(responder_token)).json()
+    row = next(i for i in listed if i["id"] == created["id"])
+    assert row["reporter_name"] == "Citizen"
+    assert row["reporter_phone"] == "8000000011"
+
+    got = client.get(
+        f"/api/v1/incidents/{created['id']}", headers=auth_headers(responder_token)
+    ).json()
+    assert got["reporter_name"] == "Citizen"
+    assert got["reporter_phone"] == "8000000011"
+
+
+def test_manually_logged_incident_reporter_is_the_logging_responder(client, db_session):
+    make_responder(db_session, "8000000013")
+    responder_token = login(client, "8000000013")
+
+    created = client.post(
+        "/api/v1/incidents",
+        headers=auth_headers(responder_token),
+        json={"latitude": 1, "longitude": 1, "type": "flood"},
+    ).json()
+    assert created["reporter_name"] == "Responder One"
+    assert created["reporter_phone"] == "8000000013"
+
+
 def test_evidence_rejects_unsupported_file_type(client):
     token = register_citizen(client, "8000000010")
     created = client.post(

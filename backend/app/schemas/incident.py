@@ -36,6 +36,11 @@ class IncidentOut(BaseModel):
     # Computed by the priority engine on the list endpoint (null elsewhere).
     priority: str | None = None
     evidence: list[EvidenceOut] = []
+    # Attached by the router (a join, not a relationship) so responders can
+    # call the reporting citizen straight from the incident — null for
+    # incidents logged manually with no citizen reporter.
+    reporter_name: str | None = None
+    reporter_phone: str | None = None
 
 
 class IncidentCreate(BaseModel):

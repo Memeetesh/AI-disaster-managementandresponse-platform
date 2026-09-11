@@ -62,6 +62,8 @@ export interface Incident {
   verified_at: string | null;
   priority: PriorityLevel | null;
   evidence: Evidence[];
+  reporter_name: string | null;
+  reporter_phone: string | null;
 }
 
 export type ResponderStatus = "available" | "en_route" | "busy" | "offline";
