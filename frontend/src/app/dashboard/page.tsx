@@ -85,7 +85,7 @@ export default function DashboardPage() {
   const riskMap = riskMapQuery.data;
   const shelters = sheltersQuery.data ?? [];
   const responders = respondersQuery.data ?? [];
-  const rescueOps = rescueOpsQuery.data ?? [];
+  const rescueOps = useMemo(() => rescueOpsQuery.data ?? [], [rescueOpsQuery.data]);
   const incidentsLoading = incidentsQuery.isLoading;
 
   useEffect(() => {
@@ -143,9 +143,12 @@ export default function DashboardPage() {
       )
     : undefined;
 
-  // Real, if sparse: hourly signal counts for the last 12h, from actual incidents.
+  // Real, if sparse: hourly signal counts for the last 12h, from actual
+  // incidents. Reads the wall clock, which is deliberate here (a "signals
+  // per hour so far" readout is expected to drift as time passes).
   const trend = useMemo(() => {
     const buckets = new Array(12).fill(0);
+    // eslint-disable-next-line react-hooks/purity -- see comment above
     const now = Date.now();
     for (const i of incidents) {
       const hoursAgo = Math.floor((now - new Date(i.created_at).getTime()) / 3_600_000);
