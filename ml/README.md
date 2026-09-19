@@ -11,4 +11,4 @@ the pipeline described in `docs/ARCHITECTURE.md` §F.
 
 Each subfolder manages its own dependencies (`computer_vision/requirements.txt`;
 the nlp prototype is plain Node with `fetch`). Model weights and sample media
-are git-ignored — see `.gitignore`..
+are git-ignored — see `.gitignore`.
